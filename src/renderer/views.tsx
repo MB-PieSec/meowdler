@@ -37,8 +37,6 @@ export interface ViewDef {
   Component: (props: ViewProps) => JSX.Element
   id: ViewId
   label: string
-  /** `null` when the view is live; otherwise the phase that unlocks it. */
-  lockedPhase: number | null
   heading: string
   blurb: string
 }
@@ -146,7 +144,7 @@ export function HomeView({ navigate }: ViewProps): JSX.Element {
   )
 }
 
-// -- Settings (theme management is real; the rest waits for Phase 7) --------------
+// -- Settings (theme · cookie auth · download folder · concurrency · engine info) ---
 
 function FlavorTile({
   flavor,
@@ -621,7 +619,7 @@ export function InstagramView(): JSX.Element {
   )
 }
 
-// -- Live Queue view (engine core landed in Phase 2) --------------------------------
+// -- Live Queue view ----------------------------------------------------------------
 
 /** Byte count → `3.2 MiB` (si? no — yt-dlp uses KiB/MiB/GiB). */
 function formatBytes(bytes: number): string {
@@ -835,7 +833,7 @@ export function QueueView(): JSX.Element {
   )
 }
 
-// -- Live History view (Phase 6) -------------------------------------------------------
+// -- Live History view -----------------------------------------------------------------
 
 type QueueFilter = 'all' | 'active' | 'done' | 'failed'
 
@@ -971,7 +969,6 @@ export const VIEW_LIST: readonly ViewDef[] = [
     Component: HomeView,
     id: 'home',
     label: 'Home',
-    lockedPhase: null,
     heading: 'Meowdler',
     blurb: 'Catppuccin-themed downloader for YouTube, X, and Instagram',
   },
@@ -979,7 +976,6 @@ export const VIEW_LIST: readonly ViewDef[] = [
     Component: YouTubeView,
     id: 'youtube',
     label: 'YouTube',
-    lockedPhase: null,
     heading: 'YouTube',
     blurb: 'Videos, playlists, and audio extraction',
   },
@@ -987,7 +983,6 @@ export const VIEW_LIST: readonly ViewDef[] = [
     Component: TwitterView,
     id: 'twitter',
     label: 'X',
-    lockedPhase: null,
     heading: 'X (Twitter)',
     blurb: 'Posts and threads at original quality',
   },
@@ -995,7 +990,6 @@ export const VIEW_LIST: readonly ViewDef[] = [
     Component: InstagramView,
     id: 'instagram',
     label: 'Instagram',
-    lockedPhase: null,
     heading: 'Instagram',
     blurb: 'Posts, Reels, and Stories via your own session',
   },
@@ -1003,7 +997,6 @@ export const VIEW_LIST: readonly ViewDef[] = [
     Component: QueueView,
     id: 'queue',
     label: 'Queue',
-    lockedPhase: null,
     heading: 'Queue',
     blurb: 'Live download management',
   },
@@ -1011,7 +1004,6 @@ export const VIEW_LIST: readonly ViewDef[] = [
     Component: HistoryView,
     id: 'history',
     label: 'History',
-    lockedPhase: null,
     heading: 'History',
     blurb: 'Everything you have downloaded',
   },
@@ -1019,7 +1011,6 @@ export const VIEW_LIST: readonly ViewDef[] = [
     Component: SettingsView,
     id: 'settings',
     label: 'Settings',
-    lockedPhase: null,
     heading: 'Settings',
     blurb: 'Appearance, downloads, and the engine',
   },

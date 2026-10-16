@@ -35,23 +35,20 @@ function Shell(): JSX.Element {
           <nav className="nav">
             {VIEW_LIST.map((view) => {
               const active = view.id === activeView
-              const locked = view.lockedPhase !== null
               return (
                 <button
                   className={`nav-item${active ? ' active' : ''}`}
-                  disabled={locked}
                   key={view.id}
                   onClick={() => setActiveView(view.id)}
-                  title={locked ? `Unlocks in Phase ${view.lockedPhase}` : view.label}
+                  title={view.label}
                   type="button"
                 >
                   {view.label}
-                  {locked ? <span className="chip chip-neutral">P{view.lockedPhase}</span> : null}
                 </button>
               )
             })}
           </nav>
-          <div className="sidebar-foot">Phase 5 — YouTube, X &amp; Instagram online</div>
+          <div className="sidebar-foot">Meowdler 0.2.0</div>
         </aside>
 
         <main className="content">
@@ -65,7 +62,7 @@ function Shell(): JSX.Element {
           })()}
           <footer className="footer">
             <span className="footer-note">
-              Phase 2 · yt-dlp engine online — Queue manages real downloads.
+              yt-dlp engine online — the Queue manages real downloads.
             </span>
           </footer>
         </main>
