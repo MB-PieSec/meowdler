@@ -345,10 +345,25 @@ export class DownloadManager {
       url: d.item.url,
       extraArgs: [...formatArgsFor(d.item.quality), ...cookieArgsFor(loadSettings().cookies)],
       handlers: {
+        onStreamStart: () => {
+          // A new format leg (video / audio) restarts yt-dlp's counters —
+          // reset the row so the two streams never blend into one bar.
+          d.item.percent = 0
+          d.item.downloadedBytes = 0
+          d.item.totalBytes = null
+          d.item.bytesPerSecond = null
+          d.item.etaSeconds = null
+          this.emit({ ...d.item })
+        },
         onProgress: (progress) => {
           d.item.percent = progress.percent
           d.item.downloadedBytes = progress.downloadedBytes
-          if (progress.totalBytes !== null) d.item.totalBytes = progress.totalBytes
+          if (progress.totalBytes !== null) {
+            // Fragmented streams (X / Instagram HLS) re-estimate the total
+            // every tick (`of ~ X MiB`); clamp monotonic so the shown total
+            // never jitters back and forth mid-download.
+            d.item.totalBytes = Math.max(d.item.totalBytes ?? 0, progress.totalBytes)
+          }
           d.item.bytesPerSecond = progress.bytesPerSecond
           d.item.etaSeconds = progress.etaSeconds
           this.emit({ ...d.item })

@@ -6,6 +6,7 @@ import {
   extractFilePath,
   extractLastError,
   isProcessingStage,
+  isStreamStart,
   parseProgressLine,
   type ProgressInfo,
 } from './progress'
@@ -277,6 +278,8 @@ export interface DownloadHandlers {
   onProgress: (progress: ProgressInfo) => void
   /** Fired when the item enters a post-download ffmpeg stage. */
   onProcessing: () => void
+  /** Fired when a new format stream begins (yt-dlp restarts its counters). */
+  onStreamStart: () => void
   /** Best-known final output path (upgraded as better lines arrive). */
   onOutputPath: (absolutePath: string) => void
   /** Last yt-dlp ERROR line, for failure reporting. */
@@ -330,6 +333,7 @@ export function spawnYtDlpDownload(options: {
     for (const line of lines) {
       const trimmed = line.trim()
       if (isProcessingStage(trimmed)) handlers.onProcessing()
+      if (isStreamStart(trimmed)) handlers.onStreamStart()
       const filePath = extractFilePath(trimmed)
       if (filePath !== null) handlers.onOutputPath(filePath)
       const progress = parseProgressLine(trimmed)

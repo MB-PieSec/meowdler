@@ -683,61 +683,63 @@ function DownloadRow({ item }: { item: DownloadItem }): JSX.Element {
   const { pause, resume, cancel, retry, remove, reveal } = useDownloads()
   return (
     <div className="download-row">
-      <div className="dl-main">
-        <div className="dl-title">{item.title ?? item.url}</div>
-        <div className="dl-status">{statusLine(item)}</div>
-      </div>
-      <div className="dl-actions">
-        {item.state === 'downloading' ? (
-          <>
-            <Button onClick={() => pause(item.id)} small title="Pause" variant="ghost">
-              Pause
-            </Button>
+      <div className="dl-header">
+        <div className="dl-main">
+          <div className="dl-title">{item.title ?? item.url}</div>
+          <div className="dl-status">{statusLine(item)}</div>
+        </div>
+        <div className="dl-actions">
+          {item.state === 'downloading' ? (
+            <>
+              <Button onClick={() => pause(item.id)} small title="Pause" variant="ghost">
+                Pause
+              </Button>
+              <Button onClick={() => cancel(item.id)} small title="Cancel" variant="danger">
+                Cancel
+              </Button>
+            </>
+          ) : null}
+          {item.state === 'paused' ? (
+            <>
+              <Button onClick={() => resume(item.id)} small title="Resume">
+                Resume
+              </Button>
+              <Button onClick={() => cancel(item.id)} small title="Cancel" variant="danger">
+                Cancel
+              </Button>
+            </>
+          ) : null}
+          {item.state === 'queued' ? (
             <Button onClick={() => cancel(item.id)} small title="Cancel" variant="danger">
               Cancel
             </Button>
-          </>
-        ) : null}
-        {item.state === 'paused' ? (
-          <>
-            <Button onClick={() => resume(item.id)} small title="Resume">
-              Resume
-            </Button>
-            <Button onClick={() => cancel(item.id)} small title="Cancel" variant="danger">
-              Cancel
-            </Button>
-          </>
-        ) : null}
-        {item.state === 'queued' ? (
-          <Button onClick={() => cancel(item.id)} small title="Cancel" variant="danger">
-            Cancel
-          </Button>
-        ) : null}
-        {item.state === 'failed' ? (
-          <>
-            <Button onClick={() => retry(item.id)} small title="Try again">
-              Retry
-            </Button>
+          ) : null}
+          {item.state === 'failed' ? (
+            <>
+              <Button onClick={() => retry(item.id)} small title="Try again">
+                Retry
+              </Button>
+              <Button onClick={() => remove(item.id)} small title="Remove" variant="ghost">
+                Remove
+              </Button>
+            </>
+          ) : null}
+          {item.state === 'completed' ? (
+            <>
+              <Button onClick={() => reveal(item.id)} small title="Show in folder" variant="ghost">
+                Show in folder
+              </Button>
+              <Button onClick={() => remove(item.id)} small title="Remove" variant="ghost">
+                Remove
+              </Button>
+            </>
+          ) : null}
+          {item.state === 'cancelled' ? (
             <Button onClick={() => remove(item.id)} small title="Remove" variant="ghost">
               Remove
             </Button>
-          </>
-        ) : null}
-        {item.state === 'completed' ? (
-          <>
-            <Button onClick={() => reveal(item.id)} small title="Show in folder" variant="ghost">
-              Show in folder
-            </Button>
-            <Button onClick={() => remove(item.id)} small title="Remove" variant="ghost">
-              Remove
-            </Button>
-          </>
-        ) : null}
-        {item.state === 'cancelled' ? (
-          <Button onClick={() => remove(item.id)} small title="Remove" variant="ghost">
-            Remove
-          </Button>
-        ) : null}
+          ) : null}
+        </div>
       </div>
       <div className="dl-progress">
         <Chip tone={STATE_TONE[item.state]}>{item.state}</Chip>

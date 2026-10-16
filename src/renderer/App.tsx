@@ -17,11 +17,19 @@ function Shell(): JSX.Element {
   const { settings, saveSettings } = useSettings()
   const toast = useToast()
   const [activeView, setActiveView] = useState<ViewId>('home')
+  const [appVersion, setAppVersion] = useState<string | null>(null)
   const goTo = (id: ViewId): void => setActiveView(id)
 
   useEffect(() => {
     document.documentElement.dataset.flavor = settings.flavor
   }, [settings.flavor])
+
+  useEffect(() => {
+    void window.meowdler
+      .ping()
+      .then((info) => setAppVersion(info.appVersion))
+      .catch(() => {})
+  }, [])
 
   const pickFlavor = (flavor: Flavor): void => {
     void saveSettings({ ...settings, flavor })
@@ -80,7 +88,9 @@ function Shell(): JSX.Element {
               )
             })}
           </nav>
-          <div className="sidebar-foot">Meowdler 0.2.0</div>
+          <div className="sidebar-foot">
+            {appVersion === null ? 'Meowdler' : `Meowdler ${appVersion}`}
+          </div>
         </aside>
 
         <main className="content">

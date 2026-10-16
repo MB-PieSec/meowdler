@@ -38,13 +38,24 @@
 }
 
 .download-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg);
+}
+
+.dl-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dl-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .dl-title {
@@ -57,7 +68,6 @@
 }
 
 .dl-status {
-  grid-column: 1;
   color: var(--text-faint);
   font-size: 12px;
   overflow: hidden;
@@ -66,13 +76,15 @@
 }
 
 .dl-actions {
-  grid-row: 1;
-  grid-column: 2;
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.dl-actions .btn {
+  white-space: nowrap;
 }
 
 .dl-progress {
@@ -194,16 +206,19 @@
   gap: 10px;
   align-items: center;
   margin-top: 10px;
+  margin-bottom: 4px;
   flex-wrap: wrap;
 }
 
 .queue-controls .entry {
   flex: 1;
   min-width: 200px;
+  max-width: 460px;
 }
 
 .filter-pills {
   display: flex;
+  flex: none;
   gap: 6px;
 }
 

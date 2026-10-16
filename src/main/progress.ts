@@ -137,3 +137,12 @@ export function isProcessingStage(line: string): boolean {
     line,
   )
 }
+
+/**
+ * True when `line` begins a new format stream (the video / audio leg of a
+ * multi-format download). yt-dlp restarts its counters for every leg, so the
+ * queue UI resets its progress row instead of mixing streams.
+ */
+export function isStreamStart(line: string): boolean {
+  return /^\[download\]\s+Destination:/i.test(line)
+}
