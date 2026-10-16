@@ -6,9 +6,11 @@ Node.js + TypeScript (ESM), Electron, React, and a wrapped `yt-dlp` engine.
 
 ## Requirements
 
-- Node.js >= 22
-- npm
-- ffmpeg (available on `PATH`) — needed for merging YouTube streams / audio extraction
+- Node.js >= 22 + npm — for building/development
+- **End users installing a release need nothing preinstalled** — the yt-dlp
+  engine and (optionally) ffmpeg are bundled inside the installers. When
+  running from source, system ffmpeg is used for stream merging/audio
+  extraction if no bundled copy is staged (`npm run fetch:ffmpeg`).
 - A display service for the Electron window (`npm run dev`)
 
 ## Getting started
@@ -31,23 +33,39 @@ npm run dev        # launch the app in dev mode with hot reload
 | `npm run format`       | Prettier write                               |
 | `npm run format:check` | Prettier check                               |
 | `npm run clean`        | Remove build output                          |
+| `npm run package`      | Build + unpacked app in `dist/` (no installer) |
+| `npm run dist`         | Installers: AppImage/deb · dmg · nsis per OS |
+| `npm run fetch:ffmpeg` | Stage a system ffmpeg into `resources/`      |
 
 ## Layout
 
 ```
 electron.vite.config.ts     build config for main / preload / renderer
+resources/yt-dlp            bundled engine binary (copied into packages)
+build/icon.*                generated app icons (png / icns / ico)
+scripts/                    make-icons.py · fetch-ffmpeg.sh
 src/
   main/                     Electron main process (Node side)
     index.ts                window creation + app lifecycle
     ipc.ts                  typed IPC handler registration
+    downloads.ts            DownloadManager: worker pool, lifecycle, ledger
+    ytdlp.ts                engine binary resolution · flat probe · spawn
+    progress.ts             pure yt-dlp --newline line parsers
+    history.ts              finished-downloads persistence (atomic writes)
+    settings.ts             settings.json load/save (userData)
   preload/
     index.ts                contextBridge API (`window.meowdler`)
-    index.d.ts              global type declaration of the bridged API
-  renderer/                 React GUI (Catppuccin themed)
-    App.tsx                 app shell + navigation
-    styles/main.css         Catppuccin palettes as CSS variables
+    window.d.ts             global type declaration of the bridged API
+  renderer/
+    views.tsx               all live views + shared MediaFormCard
+    hooks/useDownloads.tsx  renderer download state (IPC upserts)
+    components/ui.tsx       Button/Entry/ProgressBar/Chip widgets
+    theme/flavors.css       Catppuccin palettes as CSS variables
   shared/
+    downloads.ts            DownloadItem contract + history parser
+    settings.ts             AppSettings schema + validators
     ipc.ts                  IPC channel names + payload types
+build/                      icon assets shipped with packages
 out/                        build output (generated)
 ```
 
@@ -68,12 +86,6 @@ imports are written without extensions.
 - [x] Phase 6 — queue/history polish: finished downloads persist across restarts, searchable history, queue filters
 - [x] Phase 7 — settings depth: custom download folder, live concurrency (1–4), engine version display
 - [x] Phase 8 — packaging: electron-builder (asar), bundled yt-dlp in resources, AppImage/deb/dmg/nsis targets, generated icons
-- [ ] Phase 3 — YouTube (formats, playlists, audio-only)
-- [ ] Phase 4 — X (Twitter) posts and threads
-- [ ] Phase 5 — Instagram (own-account cookie/session login)
-- [ ] Phase 6 — queue view + history
-- [ ] Phase 7 — settings
-- [ ] Phase 8 — polish + packaging (electron-builder)
 
 ## Building distributables
 
