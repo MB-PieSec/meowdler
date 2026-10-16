@@ -1,0 +1,90 @@
+/* ============================================================
+   Catppuccin flavors — the single source of truth for color.
+   Every palette block defines the semantic variables used by
+   main.css / components.css. Never reference raw hex anywhere
+   else: switching flavor just swaps this block.
+
+   Accent choices: Mocha/Macchiato/Frappé → mauve, Latte → blue
+   (deep enough to stay readable on the light background).
+   ============================================================ */
+
+/* --- Mocha (default; also the no-JS first-paint fallback) --- */
+:root,
+:root[data-flavor='mocha'] {
+  --bg: #1e1e2e;
+  --bg-elev: #181825;
+  --bg-deep: #11111b;
+  --surface: #313244;
+  --surface-2: #45475a;
+  --border: #313244;
+  --text: #cdd6f4;
+  --text-soft: #bac2de;
+  --text-faint: #a6adc8;
+  --text-dim: #7f849c;
+  --accent: #cba6f7;
+  --accent-soft: rgba(203, 166, 247, 0.16);
+  --on-accent: #1e1e2e;
+  --success: #a6e3a1;
+  --danger: #f38ba8;
+  --warning: #f9e2af;
+}
+
+/* --- Macchiato --- */
+:root[data-flavor='macchiato'] {
+  --bg: #24273a;
+  --bg-elev: #1e2030;
+  --bg-deep: #181926;
+  --surface: #363a4f;
+  --surface-2: #494d64;
+  --border: #363a4f;
+  --text: #cad3f5;
+  --text-soft: #b8c0e0;
+  --text-faint: #a5adcb;
+  --text-dim: #8087a2;
+  --accent: #c6a0f6;
+  --accent-soft: rgba(198, 160, 246, 0.16);
+  --on-accent: #24273a;
+  --success: #a6da95;
+  --danger: #ee99a0;
+  --warning: #eed49f;
+}
+
+/* --- Frappé --- */
+:root[data-flavor='frappe'] {
+  --bg: #303446;
+  --bg-elev: #292c3c;
+  --bg-deep: #232634;
+  --surface: #414559;
+  --surface-2: #515762;
+  --border: #414559;
+  --text: #c6d0f5;
+  --text-soft: #b5bfe2;
+  --text-faint: #a5adce;
+  --text-dim: #838ba7;
+  --accent: #ca9ee6;
+  --accent-soft: rgba(202, 158, 230, 0.16);
+  --on-accent: #303446;
+  --success: #a6d189;
+  --danger: #e78284;
+  --warning: #e5c890;
+}
+
+/* --- Latte (light) --- */
+:root[data-flavor='latte'] {
+  --bg: #eff1f5;
+  --bg-elev: #e6e9ef;
+  --bg-deep: #dce0e8;
+  --surface: #ccd0da;
+  --surface-2: #bcc0cc;
+  --border: #ccd0da;
+  --text: #4c4f69;
+  --text-soft: #5c5f77;
+  --text-faint: #6c6f85;
+  --text-dim: #8c8fa1;
+  --accent: #1e66f5;
+  --accent-soft: rgba(30, 102, 245, 0.12);
+  --on-accent: #eff1f5;
+  --success: #40a02b;
+  --danger: #d20f39;
+  --warning: #df8e1d;
+}
