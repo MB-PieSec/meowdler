@@ -76,6 +76,11 @@ export interface MeowdlerApi {
   removeDownload(id: string): void
   /** Reveals the finished file in the OS file manager. */
   revealDownload(id: string): void
+  /**
+   * Opens the finished file with the system default player / application.
+   * Resolves `null` on success, or a human-readable failure message.
+   */
+  openDownload(id: string): Promise<string | null>
   /** Clears every completed/failed/cancelled item (queue + history). */
   clearHistory(): Promise<void>
   /**

@@ -254,6 +254,20 @@ export class DownloadManager {
     shell.showItemInFolder(path.join(d.item.outDir, d.item.filename))
   }
 
+  /** Opens the finished file with the system default player / app. */
+  async open(id: string): Promise<string | null> {
+    const d = this.downloads.get(id)
+    if (d === undefined || d.item.filename === null) {
+      return 'The original file name is unknown for this download'
+    }
+    const absolute = path.join(d.item.outDir, d.item.filename)
+    if (!fs.existsSync(absolute)) {
+      return 'The file is no longer on disk — it may have been moved or deleted'
+    }
+    const failure = await shell.openPath(absolute)
+    return failure.length > 0 ? failure : null
+  }
+
   /** Cheap flat probe for the YouTube view's preview card. */
   async preview(url: string): Promise<MediaPreview> {
     const trimmed = url.trim()

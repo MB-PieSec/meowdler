@@ -120,6 +120,24 @@ export function isFinalHistoryState(state: DownloadState): boolean {
   return (FINAL_HISTORY_STATES as readonly string[]).includes(state)
 }
 
+/**
+ * Platform badge for a media URL (`history` rows and queue items show this
+ * next to the state chip). Recognizes the three supported platforms and
+ * falls back to a generic label for anything else yt-dlp handles.
+ */
+export function sourceOfUrl(url: string): string {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return 'Web'
+  }
+  if (/(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(host)) return 'YouTube'
+  if (/(^|\.)(x\.com|twitter\.com|twimg\.com)$/.test(host)) return 'X'
+  if (/(^|\.)instagram\.com$/.test(host)) return 'Instagram'
+  return 'Web'
+}
+
 /* Consistent coercion helpers for the strict ledger parser. */
 function asString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback

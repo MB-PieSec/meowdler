@@ -33,6 +33,8 @@ interface DownloadsContextValue {
   retry: (id: string) => void
   remove: (id: string) => void
   reveal: (id: string) => void
+  /** Opens the finished file with the system player; rejects on failure. */
+  open: (id: string) => Promise<void>
   /** Clears every completed/failed/cancelled item, then refreshes. */
   clearHistory: () => Promise<void>
 }
@@ -46,6 +48,7 @@ const DownloadsContext = createContext<DownloadsContextValue>({
   retry: () => {},
   remove: () => {},
   reveal: () => {},
+  open: () => Promise.resolve(),
   clearHistory: () => Promise.resolve(),
 })
 
@@ -99,6 +102,12 @@ export function DownloadsProvider({ children }: { children: ReactNode }): JSX.El
   const reveal = useCallback((id: string): void => {
     window.meowdler.revealDownload(id)
   }, [])
+  const open = useCallback(async (id: string): Promise<void> => {
+    const failure = await window.meowdler.openDownload(id)
+    if (failure !== null) {
+      throw new Error(failure)
+    }
+  }, [])
   const clearHistory = useCallback(async (): Promise<void> => {
     await window.meowdler.clearHistory()
     // Main drops all final-state items; the cheapest guarantee is a re-sync.
@@ -119,6 +128,7 @@ export function DownloadsProvider({ children }: { children: ReactNode }): JSX.El
         retry,
         remove,
         reveal,
+        open,
         clearHistory,
       }}
     >

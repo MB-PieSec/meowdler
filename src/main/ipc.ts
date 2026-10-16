@@ -135,5 +135,8 @@ export function registerIpcChannels(manager: DownloadManager): void {
   ipcMain.on(IPC_CHANNELS.downloadReveal, (_event, id: unknown): void => {
     manager.reveal(readId(id))
   })
+  ipcMain.handle(IPC_CHANNELS.downloadOpen, async (_event, id: unknown): Promise<string | null> => {
+    return manager.open(readId(id))
+  })
   ipcMain.handle(IPC_CHANNELS.downloadClearHistory, (): void => manager.clearHistory())
 }

@@ -58,6 +58,8 @@ export const IPC_CHANNELS = {
   downloadRemove: 'download:remove',
   /** Renderer asks: reveal the finished file in the file manager. */
   downloadReveal: 'download:reveal',
+  /** Renderer asks: open the finished file with the system player. */
+  downloadOpen: 'download:open',
   /** Renderer asks: drop every finished/failed/cancelled item. */
   downloadClearHistory: 'download:clear-history',
   /** Main → renderer: a download item snapshot changed (upsert by id). */

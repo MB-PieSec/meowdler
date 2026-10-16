@@ -94,6 +94,9 @@ const meowdlerApi = {
     ipcRenderer.send(IPC_CHANNELS.downloadReveal, id)
   },
 
+  openDownload: (id: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.downloadOpen, id),
+
   clearHistory: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.downloadClearHistory),
 
   onDownloadChanged: (callback: (item: DownloadChangedPayload) => void): (() => void) => {

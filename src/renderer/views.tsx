@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import type { EngineInfo, PingResponse } from '../shared/ipc'
 import type { DownloadItem, DownloadState, MediaPreview, QualityPreset } from '../shared/downloads'
-import { isFinalHistoryState } from '../shared/downloads'
+import { isFinalHistoryState, sourceOfUrl } from '../shared/downloads'
 import {
   COOKIE_BROWSERS,
   FLAVOR_LABELS,
@@ -873,7 +873,7 @@ function formatFinished(finishedAt: number | null): string {
 
 /** The History view: every finished/failed/cancelled download, searchable. */
 export function HistoryView(): JSX.Element {
-  const { items, remove, retry, reveal, clearHistory } = useDownloads()
+  const { items, remove, retry, reveal, open, clearHistory } = useDownloads()
   const [query, setQuery] = useState('')
   const toast = useToast()
 
@@ -891,6 +891,12 @@ export function HistoryView(): JSX.Element {
       .catch((error: unknown) => {
         toast(errorText(error), 'danger')
       })
+  }
+
+  const openFile = (id: string): void => {
+    void open(id).catch((error: unknown) => {
+      toast(errorText(error), 'danger')
+    })
   }
 
   return (
@@ -928,7 +934,10 @@ export function HistoryView(): JSX.Element {
           <div className="history-list">
             {filtered.map((item) => (
               <div className="history-row" key={item.id}>
-                <Chip tone={STATE_TONE[item.state]}>{item.state}</Chip>
+                <div className="history-chips">
+                  <Chip tone={STATE_TONE[item.state]}>{item.state}</Chip>
+                  <Chip tone="neutral">{sourceOfUrl(item.url)}</Chip>
+                </div>
                 <div className="history-info">
                   <div className="preview-title">{item.title ?? item.url}</div>
                   <div className="preview-meta">
@@ -936,6 +945,11 @@ export function HistoryView(): JSX.Element {
                   </div>
                 </div>
                 <div className="history-actions">
+                  {item.state === 'completed' ? (
+                    <Button onClick={() => openFile(item.id)} small title="Open file">
+                      Open
+                    </Button>
+                  ) : null}
                   {item.state === 'completed' ? (
                     <Button
                       onClick={() => reveal(item.id)}
