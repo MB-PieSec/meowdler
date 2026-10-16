@@ -14,6 +14,7 @@
     "appId": "dev.meowdler.app",
     "productName": "Meowdler",
     "asar": true,
+    "publish": false,
     "directories": {
       "output": "dist"
     },
