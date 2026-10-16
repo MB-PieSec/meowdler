@@ -13,7 +13,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -30,12 +30,19 @@ jobs:
             artifacts: |
               dist/*.AppImage
               dist/*.deb
+              dist/latest*.yml
+              dist/*.blockmap
           - os: macos-latest
-            artifacts: dist/*.dmg
+            artifacts: |
+              dist/*.dmg
+              dist/*.zip
+              dist/latest*.yml
+              dist/*.blockmap
           - os: windows-latest
             artifacts: |
               dist/*.exe
-              dist/*.zip
+              dist/latest*.yml
+              dist/*.blockmap
 
     runs-on: ${{ matrix.os }}
     steps:

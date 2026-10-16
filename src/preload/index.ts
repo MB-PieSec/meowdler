@@ -4,6 +4,7 @@ import {
   type EngineInfo,
   type MaximizedPayload,
   type PingResponse,
+  type UpdateCheckOutcome,
 } from '../shared/ipc'
 import type {
   DownloadChangedPayload,
@@ -65,6 +66,9 @@ const meowdlerApi = {
     ipcRenderer.invoke(IPC_CHANNELS.dialogDownloadDir),
 
   engineInfo: (): Promise<EngineInfo> => ipcRenderer.invoke(IPC_CHANNELS.appEngineInfo),
+
+  checkForUpdates: (prompt: boolean): Promise<UpdateCheckOutcome> =>
+    ipcRenderer.invoke(IPC_CHANNELS.appUpdateCheck, prompt),
 
   pauseDownload: (id: string): void => {
     ipcRenderer.send(IPC_CHANNELS.downloadPause, id)

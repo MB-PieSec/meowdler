@@ -20,6 +20,8 @@ export const IPC_CHANNELS = {
   // -- Window controls (frameless titlebar) ------------------------------------
   /** Renderer asks: minimize the window (fire-and-forget). */
   winMinimize: 'win:minimize',
+  /** Renderer asks: check GitHub releases for a newer app version. */
+  appUpdateCheck: 'app:update-check',
   /** Renderer asks: toggle maximize state (fire-and-forget). */
   winMaximizeToggle: 'win:maximize-toggle',
   /** Renderer asks: is the window currently maximized? */
@@ -90,4 +92,22 @@ export interface EngineInfo {
   ffmpegVersion: string | null
   /** True when the yt-dlp binary shipped with the app (not PATH fallback). */
   ytdlpBundled: boolean
+}
+
+/** Result of one update check through electron-updater. */
+export interface UpdateCheckOutcome {
+  mode:
+    | 'up-to-date'
+    /** A newer GitHub release exists. */
+    | 'available'
+    /** Running from a format electron-updater cannot install (deb / .tar). */
+    | 'unsupported'
+    /** Development build (`autoUpdater` is inactive outside packaged apps). */
+    | 'dev'
+    | 'error'
+  currentVersion: string
+  latestVersion: string | null
+  /** True when the user chose install and the download/relaunch is underway. */
+  installing: boolean
+  error: string | null
 }

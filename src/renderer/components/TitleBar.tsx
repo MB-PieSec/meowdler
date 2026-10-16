@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { JSX, MouseEvent } from 'react'
 import { FLAVORS, FLAVOR_LABELS, type Flavor } from '../../shared/settings'
-import { IconClose, IconMaximize, IconMinimize, IconPaw, IconRestore } from './icons'
+import {
+  IconClose,
+  IconDownloadCloud,
+  IconMaximize,
+  IconMinimize,
+  IconPaw,
+  IconRestore,
+} from './icons'
 
 /**
  * Frameless custom titlebar: draggable header holding the brand, a flavor
@@ -21,9 +28,10 @@ const FLAVOR_DOT: Record<Flavor, string> = {
 interface TitleBarProps {
   flavor: Flavor
   onPickFlavor: (flavor: Flavor) => void
+  onCheckUpdates: () => void
 }
 
-export function TitleBar({ flavor, onPickFlavor }: TitleBarProps): JSX.Element {
+export function TitleBar({ flavor, onPickFlavor, onCheckUpdates }: TitleBarProps): JSX.Element {
   const [maximized, setMaximized] = useState(false)
 
   useEffect(() => {
@@ -70,6 +78,16 @@ export function TitleBar({ flavor, onPickFlavor }: TitleBarProps): JSX.Element {
             />
           ))}
         </div>
+
+        <button
+          className="tb-update"
+          onClick={onCheckUpdates}
+          title="Check for updates"
+          type="button"
+        >
+          <IconDownloadCloud size={15} />
+          <span>Check updates</span>
+        </button>
 
         <div className="win-controls">
           <button onClick={() => window.meowdler.minimizeWindow()} title="Minimize" type="button">

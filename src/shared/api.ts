@@ -1,4 +1,4 @@
-import type { EngineInfo, PingResponse } from './ipc'
+import type { EngineInfo, PingResponse, UpdateCheckOutcome } from './ipc'
 import type {
   DownloadChangedPayload,
   DownloadItem,
@@ -57,6 +57,13 @@ export interface MeowdlerApi {
   pickDownloadFolder(): Promise<string | null>
   /** yt-dlp / ffmpeg versions of the live engine. */
   engineInfo(): Promise<EngineInfo>
+  /**
+   * Checks GitHub Releases for a newer version. When `prompt` is true and an
+   * update exists, main shows the native Install/Not-now dialog and (on
+   * consent) downloads + relaunches, or opens the releases page on formats
+   * that cannot self-install (deb).
+   */
+  checkForUpdates(prompt: boolean): Promise<UpdateCheckOutcome>
   /** Halts a running download; .part data is kept for resume. */
   pauseDownload(id: string): void
   /** Re-queues a paused download (concurrency rules apply). */

@@ -22,20 +22,20 @@ npm run dev        # launch the app in dev mode with hot reload
 
 ## Scripts
 
-| Script                 | Description                                  |
-| ---------------------- | -------------------------------------------- |
-| `npm run dev`          | Run dev server + Electron with hot reload    |
-| `npm start`            | Run Electron with the last built bundle      |
-| `npm run build`        | Bundle main / preload / renderer into `out/` |
-| `npm run typecheck`    | Strict type-check, no emit                   |
-| `npm run lint`         | ESLint (flat config)                         |
-| `npm run lint:fix`     | ESLint with auto-fix                         |
-| `npm run format`       | Prettier write                               |
-| `npm run format:check` | Prettier check                               |
-| `npm run clean`        | Remove build output                          |
+| Script                 | Description                                    |
+| ---------------------- | ---------------------------------------------- |
+| `npm run dev`          | Run dev server + Electron with hot reload      |
+| `npm start`            | Run Electron with the last built bundle        |
+| `npm run build`        | Bundle main / preload / renderer into `out/`   |
+| `npm run typecheck`    | Strict type-check, no emit                     |
+| `npm run lint`         | ESLint (flat config)                           |
+| `npm run lint:fix`     | ESLint with auto-fix                           |
+| `npm run format`       | Prettier write                                 |
+| `npm run format:check` | Prettier check                                 |
+| `npm run clean`        | Remove build output                            |
 | `npm run package`      | Build + unpacked app in `dist/` (no installer) |
-| `npm run dist`         | Installers: AppImage/deb · dmg · nsis per OS |
-| `npm run fetch:ffmpeg` | Stage a system ffmpeg into `resources/`      |
+| `npm run dist`         | Installers: AppImage/deb · dmg · nsis per OS   |
+| `npm run fetch:ffmpeg` | Stage a system ffmpeg into `resources/`        |
 
 ## Layout
 
@@ -101,3 +101,10 @@ npm run fetch:ffmpeg  # optional: stage a system ffmpeg into resources/ so insta
 - App icons are generated with `python3 scripts/make-icons.py` (PIL only).
 - `homepage`/`repository` point at https://github.com/MB-PieSec/meowdler — the
   deb metadata validates them now.
+- Releases publish `latest*.yml` update feeds, so the app checks GitHub on
+  startup (Install / Not-now prompt) and via the titlebar button. In-place
+  updates work for AppImage, Windows NSIS, and the macOS zip target; deb
+  installs open the releases page instead.
+- On Linux the Chromium sandbox is kept where the install layout supports it
+  (deb ships a SUID-helper postinst + AppArmor profile); AppImage and unpacked
+  builds fall back to an unsandboxed launch so they never abort the zygote.

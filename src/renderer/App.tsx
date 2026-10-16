@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { FLAVOR_LABELS, type Flavor } from '../shared/settings'
+import type { UpdateCheckOutcome } from '../shared/ipc'
 import { TitleBar } from './components/TitleBar'
 import { ToastProvider, useToast } from './components/toast'
 import { SettingsProvider, useSettings } from './hooks/useSettings'
-import { DownloadsProvider } from './hooks/useDownloads'
+import { DownloadsProvider, errorText } from './hooks/useDownloads'
 import { VIEW_LIST, viewById, type ViewId } from './views'
 
 /**
@@ -27,9 +28,40 @@ function Shell(): JSX.Element {
     toast(`${FLAVOR_LABELS[flavor]} theme applied`, 'success')
   }
 
+  const checkUpdates = useCallback((): void => {
+    void window.meowdler
+      .checkForUpdates(true)
+      .then((outcome: UpdateCheckOutcome) => {
+        switch (outcome.mode) {
+          case 'up-to-date':
+            toast(`You're up to date — Meowdler v${outcome.currentVersion}`, 'success')
+            return
+          case 'available':
+            if (outcome.installing) {
+              toast(`Downloading ${outcome.latestVersion} — the app restarts once ready`, 'success')
+            } else {
+              // Format without self-install (deb): main opened the releases page.
+              toast(
+                `Version ${outcome.latestVersion} available — opening the releases page`,
+                'info',
+              )
+            }
+            return
+          case 'dev':
+            toast('Dev build — update checks run in packaged apps only', 'info')
+            return
+          default:
+            toast(outcome.error ?? 'Update check failed', 'danger')
+        }
+      })
+      .catch((error: unknown) => {
+        toast(errorText(error), 'danger')
+      })
+  }, [toast])
+
   return (
     <div className="app-shell">
-      <TitleBar flavor={settings.flavor} onPickFlavor={pickFlavor} />
+      <TitleBar flavor={settings.flavor} onCheckUpdates={checkUpdates} onPickFlavor={pickFlavor} />
       <div className="app-body">
         <aside className="sidebar">
           <nav className="nav">

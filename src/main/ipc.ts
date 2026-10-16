@@ -4,6 +4,7 @@ import {
   type EngineInfo,
   type MaximizedPayload,
   type PingResponse,
+  type UpdateCheckOutcome,
 } from '../shared/ipc'
 import type { DownloadItem, MediaPreview, SubmitResult } from '../shared/downloads'
 import { parseDownloadOptions } from '../shared/downloads'
@@ -11,6 +12,7 @@ import { parseSettings, type AppSettings } from '../shared/settings'
 import { DownloadError, type DownloadManager } from './downloads'
 import { loadSettings, saveSettings } from './settings'
 import { readEngineVersions } from './ytdlp'
+import { runUpdateCheck } from './updater'
 
 /** Any event carrying a `sender` web contents. */
 type IpcEvent = Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
@@ -64,6 +66,13 @@ export function registerIpcChannels(manager: DownloadManager): void {
   ipcMain.handle(IPC_CHANNELS.appEngineInfo, async (): Promise<EngineInfo> => {
     return readEngineVersions()
   })
+
+  ipcMain.handle(
+    IPC_CHANNELS.appUpdateCheck,
+    async (_event, prompt: unknown): Promise<UpdateCheckOutcome> => {
+      return runUpdateCheck(prompt === true, senderWindow(_event) ?? undefined)
+    },
+  )
 
   // -- Window controls ---------------------------------------------------------
   ipcMain.on(IPC_CHANNELS.winMinimize, (event): void => {

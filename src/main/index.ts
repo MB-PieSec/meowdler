@@ -1,8 +1,11 @@
 import { app, BrowserWindow, shell } from 'electron'
+import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { IPC_CHANNELS } from '../shared/ipc'
 import { DownloadManager } from './downloads'
 import { registerIpcChannels } from './ipc'
+import { scheduleStartupUpdateCheck } from './updater'
 
 /** Catppuccin Mocha `base`, applied before first paint to avoid white flash. */
 const WINDOW_BG = '#1e1e2e'
@@ -65,6 +68,41 @@ function createMainWindow(): BrowserWindow {
 // for this UI.
 app.disableHardwareAcceleration()
 
+/**
+ * Chromium sandbox handling for packaged Linux builds.
+ *
+ * The `chrome-sandbox` SUID helper next to the executable decides the path:
+ *  - deb installs: electron-builder's postinst sets SUID only when user
+ *    namespaces are unavailable; otherwise the userns sandbox + shipped
+ *    AppArmor profile keep the full sandbox. Never touch the switches here.
+ *  - helper missing (or present without SUID outside /opt): AppImage/unpacked
+ *    layouts. Node probes userns availability the same way the postinst does;
+ *    only disable the sandbox when the helper is genuinely unusable.
+ */
+if (process.platform === 'linux' && app.isPackaged) {
+  const execDir = path.dirname(process.execPath)
+  let helperUsable = false
+  let helperMissing = false
+  try {
+    helperUsable = (fs.statSync(path.join(execDir, 'chrome-sandbox')).mode & 0o4000) !== 0
+  } catch {
+    helperMissing = true
+  }
+
+  let noSandbox = false
+  if (helperMissing) {
+    const probe = spawnSync('unshare', ['--user', 'true'], { stdio: 'ignore' })
+    noSandbox = (probe.status ?? 1) !== 0
+  } else if (!helperUsable && !execDir.startsWith('/opt/')) {
+    // A SUID-less helper aborts the zygote outright (AppImage / unpacked dir).
+    noSandbox = true
+  }
+
+  if (noSandbox) {
+    app.commandLine.appendSwitch('no-sandbox')
+  }
+}
+
 app
   .whenReady()
   .then(() => {
@@ -76,6 +114,7 @@ app
     })
     registerIpcChannels(downloadManager)
     createMainWindow()
+    scheduleStartupUpdateCheck(() => BrowserWindow.getAllWindows()[0])
 
     // macOS keeps the process alive with a fresh window; every other OS quits.
     app.on('activate', () => {

@@ -26,6 +26,16 @@ function strokeSvg(size: number, ...paths: readonly JSX.Element[]): JSX.Element 
   )
 }
 
+/** App update (cloud + arrow, feather-style "download-cloud"). */
+export function IconDownloadCloud({ size = 18 }: IconProps): JSX.Element {
+  return strokeSvg(
+    size,
+    <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29" />,
+    <path d="M16 16l-4 4-4-4" />,
+    <path d="M12 20V9" />,
+  )
+}
+
 /** Home. */
 export function IconHome({ size = 18 }: IconProps): JSX.Element {
   return strokeSvg(
