@@ -513,7 +513,6 @@ const BROWSER_LABELS: Record<CookieBrowser, string> = {
   chromium: 'Chromium',
   edge: 'Edge',
   firefox: 'Firefox',
-  librewolf: 'LibreWolf',
   opera: 'Opera',
   safari: 'Safari',
   vivaldi: 'Vivaldi',

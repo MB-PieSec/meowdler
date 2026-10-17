@@ -23,7 +23,6 @@ export const COOKIE_BROWSERS = [
   'chromium',
   'edge',
   'firefox',
-  'librewolf',
   'opera',
   'safari',
   'vivaldi',
@@ -142,5 +141,9 @@ function parseCookies(input: unknown): CookieSettings {
     typeof raw.browser === 'string' && (COOKIE_BROWSERS as readonly string[]).includes(raw.browser)
       ? (raw.browser as CookieBrowser)
       : null
-  return { mode, file, browser }
+  // A browser-mode card with no supported browser (dropped engine value,
+  // stale settings) cannot produce engine args: fall back to off-mode.
+  const effectiveMode: CookieSettings['mode'] =
+    mode === 'browser' && browser === null ? 'off' : mode
+  return { mode: effectiveMode, file, browser }
 }

@@ -159,6 +159,27 @@ export function withEngineHint(message: string): string {
   if (/could not copy .* cookies|database is locked|cookie store is locked/i.test(message)) {
     return `${message} — Fix: that browser seems to be running with a locked cookie store / fresh encryption — close it fully and retry, or use a cookies.txt file in Settings → Cookies`
   }
+  // Windows Chromium-family decryption failure (yt-dlp issue #10927): newer
+  // Chrome "App-Bound" encryption and broken keyring bindings both land here.
+  if (/failed to decrypt with dpapi/i.test(message)) {
+    return `${message} — Fix: this Chromium-family browser's cookie encryption cannot be read — close the browser fully and retry; if it still fails, use a cookies.txt export in Settings → Cookies`
+  }
+  // The engine raises "unsupported platform" only from the Safari cookie
+  // reader (cookies.py), so this maps Safari-on-non-mac receipts.
+  if (/unsupported platform/i.test(message)) {
+    return `${message} — Fix: reading Safari cookies works on macOS only — pick a browser available on this OS, or a cookies.txt file in Settings → Cookies`
+  }
+  // Cookie-store access denied (TCC on macOS full-disk gating; Unix perms).
+  if (/permission denied|operation not permitted/i.test(message)) {
+    if (process.platform === 'darwin') {
+      return `${message} — Fix: macOS blocked the cookie read — grant Meowdler Full Disk Access (System Settings → Privacy & Security → Full Disk Access → add Meowdler), then retry, or use a cookies.txt file`
+    }
+    return `${message} — Fix: the cookie store or file cannot be read (permissions) — check the file/browser access, or use a cookies.txt file in Settings → Cookies`
+  }
+  // Generic wrap yt-dlp raises when nothing above was classified.
+  if (/failed to load cookies/i.test(message)) {
+    return `${message} — Fix: the engine could not read this cookie source — close the browser fully and retry, or use a cookies.txt file in Settings → Cookies`
+  }
   if (/does not look like a Netscape format cookies file/i.test(message)) {
     return `${message} — Fix: re-export a Netscape-format cookies.txt with a “Get cookies.txt” browser extension and pick it again in Settings → Cookies`
   }
@@ -407,6 +428,11 @@ export function resolveCookieArgs(cards: CookieSettings): string[] {
   }
   if (cards.mode === 'file' && cards.file === null) {
     throw new Error('Cookies are set to file mode, but no file is chosen — Settings → Cookies')
+  }
+  if (cards.mode === 'browser' && cards.browser === null) {
+    throw new Error(
+      'Cookies are set to browser mode, but no browser is chosen — Settings → Cookies',
+    )
   }
   return cookieArgsFor(cards)
 }

@@ -47,6 +47,19 @@ describe('parseSettings', () => {
         .browser,
     ).toBe('vivaldi')
   })
+  it('migrates browser values the engine cannot read (librewolf) to off-mode', () => {
+    expect(
+      parseSettings({ flavor: 'mocha', cookies: { mode: 'browser', browser: 'librewolf' } })
+        .cookies,
+    ).toEqual({ mode: 'off', file: null, browser: null })
+  })
+  it('demotes browser-mode cards with no browser to off-mode', () => {
+    expect(parseSettings({ flavor: 'mocha', cookies: { mode: 'browser' } }).cookies).toEqual({
+      mode: 'off',
+      file: null,
+      browser: null,
+    })
+  })
   it('clamps concurrency and validates the outDir shape', () => {
     expect(parseSettings({ flavor: 'mocha', downloads: { concurrency: 9 } }).downloads).toEqual({
       outDir: null,

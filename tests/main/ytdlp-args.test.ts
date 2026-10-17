@@ -163,6 +163,22 @@ describe('withEngineHint (cookie + engine failures)', () => {
     const message = "ERROR: '/tmp/x' does not look like a Netscape format cookies file"
     expect(withEngineHint(message)).toMatch(/re-export a Netscape-format cookies\.txt/)
   })
+  it('hints Windows Chromium decryption failures (DPAPI / App-Bound)', () => {
+    const message =
+      'ERROR: Failed to decrypt with DPAPI. See  https://github.com/yt-dlp/yt-dlp/issues/10927  for more info'
+    expect(withEngineHint(message)).toMatch(/close the browser fully and retry/)
+  })
+  it('hints Safari-on-non-macOS (engine: unsupported platform)', () => {
+    const message = 'ERROR: unsupported platform: linux'
+    expect(withEngineHint(message)).toMatch(/works on macOS only/)
+  })
+  it('hints unreadable cookie sources (generic permission class, Windows-like message kept neutral)', () => {
+    const message = "ERROR: [Errno 13] Permission denied: '/home/u/.mozilla/firefox/Cookies'"
+    expect(withEngineHint(message)).toContain('check the file/browser access')
+  })
+  it('adds a generic cookie fallback for unclassified load failures', () => {
+    expect(withEngineHint('ERROR: failed to load cookies')).toMatch(/close the browser fully/)
+  })
   it('leaves ordinary failures alone', () => {
     expect(withEngineHint('ERROR: [youtube] id: This video is unavailable')).not.toContain('Fix:')
   })
