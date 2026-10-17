@@ -29,7 +29,11 @@ export function loadSettings(): AppSettings {
 export function saveSettings(next: AppSettings): AppSettings {
   try {
     fs.mkdirSync(app.getPath('userData'), { recursive: true })
-    fs.writeFileSync(settingsPath(), JSON.stringify(next, null, 2), 'utf8')
+    // Atomic write (mirrors writeHistory): a crash mid-write leaves the
+    // previous settings.json intact because the tmp file is renamed over it.
+    const tmp = `${settingsPath()}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf8')
+    fs.renameSync(tmp, settingsPath())
   } catch (error) {
     console.error('Failed to persist settings:', error)
   }

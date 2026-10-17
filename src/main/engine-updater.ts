@@ -150,7 +150,7 @@ async function fetchLatestRelease(): Promise<LatestRelease> {
 }
 
 /** Numeric per-segment compare for date-style versions (`2026.10.01`). */
-function versionGreater(latest: string, current: string): boolean {
+export function versionGreater(latest: string, current: string): boolean {
   const asNumbers = (value: string): number[] =>
     value
       .replace(/^v/, '')
