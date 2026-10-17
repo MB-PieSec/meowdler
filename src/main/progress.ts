@@ -36,9 +36,9 @@ function unitToBytes(value: number, unit: string): number {
 /** Parses `[-]HH:MM:SS` / `MM:SS` seconds. */
 export function parseEta(text: string): number | null {
   if (text === 'Unknown') return null
-  const parts = text.split(':').map(Number)
-  if (parts.some((part) => !Number.isFinite(part))) return null
-  return parts.reduce((total, part) => total * 60 + part, 0)
+  const parts = text.split(':')
+  if (parts.some((part) => part.length === 0 || !Number.isFinite(Number(part)))) return null
+  return parts.reduce((total, part) => total * 60 + Number(part), 0)
 }
 
 /** Extracts the last human-readable `ERROR:` line from yt-dlp stderr. */
@@ -133,7 +133,7 @@ export function extractFilePath(line: string): string | null {
 
 /** Returns 'processing' when `line` belongs to a post-download ffmpeg step. */
 export function isProcessingStage(line: string): boolean {
-  return /^\[(merger|metadataconsumer|embedthumbnail|extractaudio|videoconvertor|fixup_.*|modifychains?)\]/i.test(
+  return /^\[(merger|metadataconsumer|embedthumbnail|extractaudio|videoconvertor|fixup\w*|modifychains?)\]/i.test(
     line,
   )
 }

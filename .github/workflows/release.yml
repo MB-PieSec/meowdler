@@ -5,9 +5,10 @@
 #
 # The committed `resources/yt-dlp` is a Linux binary (handy for desktop dev);
 # the CI replaces it with the matching per-OS build so every platform's
-# package ships a working engine. ffmpeg is staged the same way, since best-
-# quality video merging needs it (without it the app reports "merging
-# unavailable" and only single-format downloads work).
+# package ships a working engine. ffmpeg and Deno (yt-dlp's JavaScript
+# runtime for YouTube) are staged the same way, so the app is self-contained:
+# without ffmpeg only single-format downloads work, and without the runtime
+# YouTube's anti-bot wall cannot be evaluated.
 
 name: Release
 
@@ -66,35 +67,56 @@ jobs:
           restore-keys: ${{ runner.os }}-electron-
 
       # -- platform-matching engine binaries -------------------------------
+      # deno is yt-dlp's default JavaScript runtime (YouTube's anti-bot
+      # challenges need one); staged exactly like yt-dlp so every package
+      # is self-contained.
 
-      - name: Stage yt-dlp + ffmpeg (linux)
+      - name: Stage yt-dlp + ffmpeg + deno (linux)
         if: runner.os == 'Linux'
         run: |
           curl -fsSL -o resources/yt-dlp \
             https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
           chmod +x resources/yt-dlp
+          curl -fsSL -o deno.zip \
+            https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip
+          unzip -oq deno.zip
+          mv ./deno resources/deno
+          chmod +x resources/deno
+          rm deno.zip
           sudo apt-get update -q
           sudo apt-get install -y -qq ffmpeg
           bash scripts/fetch-ffmpeg.sh
 
-      - name: Stage yt-dlp + ffmpeg (macOS)
+      - name: Stage yt-dlp + ffmpeg + deno (macOS)
         if: runner.os == 'macOS'
         run: |
           curl -fsSL -o resources/yt-dlp \
             https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
           chmod +x resources/yt-dlp
+          curl -fsSL -o deno.zip \
+            https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip
+          unzip -oq deno.zip
+          mv ./deno resources/deno
+          chmod +x resources/deno
+          rm deno.zip
           brew install ffmpeg
           bash scripts/fetch-ffmpeg.sh
 
-      - name: Stage yt-dlp + ffmpeg (Windows)
+      - name: Stage yt-dlp + ffmpeg + deno (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile resources/yt-dlp
+          Invoke-WebRequest -Uri "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip" -OutFile deno.zip
+          Expand-Archive -Path deno.zip -DestinationPath deno-tmp
+          Copy-Item deno-tmp/deno.exe -Destination resources/deno.exe
+          Remove-Item deno.zip, deno-tmp -Recurse -Force
           Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile ffmpeg.zip
           Expand-Archive -Path ffmpeg.zip -DestinationPath ffmpeg-tmp
           $exe = Get-ChildItem -Path ffmpeg-tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-          Copy-Item $exe.FullName -Destination resources/ffmpeg
+          # Windows must keep the .exe extension: an extensionless copy in
+          # resources/ cannot be executed by CreateProcess.
+          Copy-Item $exe.FullName -Destination resources/ffmpeg.exe
           Remove-Item ffmpeg.zip, ffmpeg-tmp -Recurse -Force
 
       # -- gates + build ----------------------------------------------------
@@ -106,6 +128,9 @@ jobs:
         run: |
           npm run typecheck
           npm run lint
+
+      - name: Tests
+        run: npm test
 
       # --publish never: the build lanes must not attempt auto-publish
       # (tag pushes make electron-builder demand GH_TOKEN, which only the

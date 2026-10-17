@@ -19,6 +19,12 @@ npm-debug.log*
 # Downloads / history (development)
 data/
 
+# Runtime-staged engine pieces: ffmpeg + deno are downloaded by CI or
+# fetch:ffmpeg (never commit the multi-MB binaries). resources/yt-dlp IS
+# committed on purpose (Linux build for desktop dev).
+resources/ffmpeg*
+resources/deno*
+
 # Editors / OS
 .DS_Store
 .idea/

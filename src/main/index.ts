@@ -6,6 +6,7 @@ import { IPC_CHANNELS } from '../shared/ipc'
 import { DownloadManager } from './downloads'
 import { registerIpcChannels } from './ipc'
 import { scheduleStartupUpdateCheck } from './updater'
+import { scheduleStartupEngineCheck } from './engine-updater'
 
 /** Catppuccin Mocha `base`, applied before first paint to avoid white flash. */
 const WINDOW_BG = '#1e1e2e'
@@ -23,10 +24,10 @@ function createMainWindow(): BrowserWindow {
     backgroundColor: WINDOW_BG,
     title: 'Meowdler',
     webPreferences: {
-      preload: path.join(import.meta.dirname, '../preload/index.mjs'),
+      preload: path.join(import.meta.dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       spellcheck: false,
     },
   })
@@ -48,9 +49,23 @@ function createMainWindow(): BrowserWindow {
   })
 
   // Open external links in the user's browser instead of a new Electron window.
+  // Only http(s) URLs are ever handed to the OS shell — arbitrary schemes
+  // (file:, custom protocol handlers) must never reach openExternal.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  // Block in-app navigation away from the local renderer (links, history
+  // traversal, redirects); remote http(s) targets go to the browser instead.
+  const allowNavigation = (url: string): boolean =>
+    url.startsWith('file://') ||
+    (process.env.ELECTRON_RENDERER_URL !== undefined &&
+      url.startsWith(process.env.ELECTRON_RENDERER_URL))
+  win.webContents.on('will-navigate', (event, url) => {
+    if (allowNavigation(url)) return
+    event.preventDefault()
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
   })
 
   const devUrl = process.env.ELECTRON_RENDERER_URL
@@ -115,6 +130,8 @@ app
     registerIpcChannels(downloadManager)
     createMainWindow()
     scheduleStartupUpdateCheck(() => BrowserWindow.getAllWindows()[0])
+    // Quiet yt-dlp engine freshness check; never dialog, never blocks.
+    scheduleStartupEngineCheck()
 
     // macOS keeps the process alive with a fresh window; every other OS quits.
     app.on('activate', () => {

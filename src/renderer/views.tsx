@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
-import type { EngineInfo, PingResponse } from '../shared/ipc'
+import type { EngineInfo, EngineUpdateOutcome, PingResponse } from '../shared/ipc'
 import type { DownloadItem, DownloadState, MediaPreview, QualityPreset } from '../shared/downloads'
 import { isFinalHistoryState, sourceOfUrl } from '../shared/downloads'
 import {
@@ -8,6 +8,7 @@ import {
   FLAVOR_LABELS,
   FLAVORS,
   type CookieBrowser,
+  type CookieFileStatus,
   type CookieSettings,
   type DownloadLocationSettings,
   type Flavor,
@@ -168,10 +169,63 @@ function FlavorTile({
   )
 }
 
+/** Settings → Engine readout for the last engine-update check. */
+function engineUpdateText(update: EngineInfo['update']): string {
+  if (update === null) return 'Not checked yet — github.com is polled only when you ask'
+  switch (update.status) {
+    case 'up-to-date':
+      return `Up to date (latest release ${update.latestVersion})`
+    case 'available':
+      return `Newer engine available: ${update.latestVersion}`
+    case 'error':
+      return 'Check failed — is the network reachable?'
+  }
+}
+
 export function SettingsView(): JSX.Element {
   const { loaded, settings, saveSettings } = useSettings()
   const [engine, setEngine] = useState<EngineInfo | null>(null)
+  const [engineUpdating, setEngineUpdating] = useState(false)
   const toast = useToast()
+
+  const refreshEngine = (): void => {
+    void window.meowdler
+      .engineInfo()
+      .then((info) => setEngine(info))
+      .catch(() => {})
+  }
+
+  /** Check (or install) the yt-dlp engine; refresh + toast from the outcome. */
+  const runEngineAction = (install: boolean): void => {
+    setEngineUpdating(true)
+    const request = install
+      ? window.meowdler.installEngineUpdate()
+      : window.meowdler.checkEngineUpdate()
+    void request
+      .then((outcome: EngineUpdateOutcome) => {
+        if (outcome.mode === 'available') {
+          toast(`Newer engine available: ${outcome.latestVersion} — press “Update engine”`, 'info')
+        } else if (outcome.mode === 'installed') {
+          toast(`Engine updated to ${outcome.latestVersion} — next downloads use it`, 'success')
+        } else if (outcome.mode === 'up-to-date') {
+          toast(`Engine is up to date (${outcome.currentVersion ?? 'unknown'})`, 'info')
+        } else if (outcome.mode === 'blocked') {
+          toast(outcome.note ?? 'The engine is in use right now', 'danger')
+        } else {
+          toast(outcome.note ?? outcome.error ?? 'Engine update failed', 'danger')
+        }
+        refreshEngine()
+      })
+      .catch((error: unknown) => {
+        toast(errorText(error), 'danger')
+      })
+      .finally(() => {
+        setEngineUpdating(false)
+      })
+  }
+
+  const checkEngine = (): void => runEngineAction(false)
+  const updateEngine = (): void => runEngineAction(true)
 
   const pick = (flavor: Flavor): void => {
     void saveSettings({ ...settings, flavor })
@@ -212,11 +266,28 @@ export function SettingsView(): JSX.Element {
     }
   }, [])
 
+  /** Human text for a cookies.txt validation failure. */
+  function cookieFileComplaint(status: Exclude<CookieFileStatus['status'], 'ok'>): string {
+    switch (status) {
+      case 'missing':
+        return 'that file is gone (or not a file) — nothing was saved'
+      case 'unreadable':
+        return 'that file cannot be read (permissions?) — nothing was saved'
+      case 'format':
+        return 'that file is not a Netscape-format cookies.txt — re-export it with a “Get cookies.txt” browser extension; nothing was saved'
+    }
+  }
+
   const chooseCookiesFile = (): void => {
     void window.meowdler
       .pickCookiesFile()
-      .then((file) => {
+      .then(async (file) => {
         if (file === null) return
+        const validated = await window.meowdler.checkCookiesFile(file)
+        if (validated.status !== 'ok') {
+          toast(`Cookies file rejected: ${cookieFileComplaint(validated.status)}`, 'danger')
+          return
+        }
         saveCookies({ mode: 'file', file })
         toast('Cookies file set', 'success')
       })
@@ -374,7 +445,13 @@ export function SettingsView(): JSX.Element {
               {engine === null
                 ? 'Reading…'
                 : (engine.ytdlpVersion ?? 'unavailable') +
-                  ` · ${engine.ytdlpBundled ? 'bundled with Meowdler' : 'from PATH'}`}
+                  ` · ${
+                    engine.ytdlpSource === 'self-updated'
+                      ? 'in your profile folder (engine update)'
+                      : engine.ytdlpSource === 'bundled'
+                        ? 'bundled with Meowdler'
+                        : 'from PATH'
+                  }`}
             </div>
           </div>
         </div>
@@ -388,8 +465,39 @@ export function SettingsView(): JSX.Element {
             </div>
           </div>
         </div>
+        <div className="set-line">
+          <div className="set-info">
+            <div className="set-name">JavaScript runtime</div>
+            <div className="preview-meta">
+              {engine === null
+                ? 'Reading…'
+                : (engine.jsRuntime ??
+                  'not found — YouTube will fail; reinstalling Meowdler restores it')}
+            </div>
+          </div>
+        </div>
+        <div className="set-line">
+          <div className="set-info">
+            <div className="set-name">Engine updates</div>
+            <div className="preview-meta">
+              {engine === null || engineUpdating ? 'Reading…' : engineUpdateText(engine.update)}
+            </div>
+          </div>
+          <div className="history-actions">
+            {engine?.update?.status === 'available' ? (
+              <Button disabled={engineUpdating} onClick={updateEngine} small>
+                Update engine
+              </Button>
+            ) : null}
+            <Button disabled={engineUpdating} onClick={checkEngine} small variant="ghost">
+              Check engine updates
+            </Button>
+          </div>
+        </div>
         <p className="card-text muted">
-          Engine fixes ship with Meowdler updates; the platform loaders change constantly.
+          Engine updates download from official yt-dlp releases on GitHub (checksum-verified) and
+          land in your profile folder, so they survive app updates and never touch the install
+          directory.
         </p>
       </section>
     </>
@@ -436,6 +544,33 @@ const ALL_PRESETS: readonly QualityPreset[] = [
 /** X rarely exceeds 720p; that's the honest menu for tweets. */
 const X_PRESET_ORDER: readonly QualityPreset[] = ['best', 'p720', 'p480', 'audio-mp3', 'audio-m4a']
 
+/** Presets that cannot run without ffmpeg (audio extraction). */
+const FFMPEG_REQUIRED_PRESETS: readonly QualityPreset[] = ['audio-mp3', 'audio-m4a']
+
+/**
+ * ffmpeg presence across the whole app session (module-cached: engineInfo
+ * runs the binaries once). In absence the media form labels/disables the
+ * presets that would fail mid-download instead of letting the engine error.
+ */
+let ffmpegPresentPromise: Promise<boolean> | null = null
+function useFfmpegPresent(): boolean | null {
+  const [present, setPresent] = useState<boolean | null>(null)
+  useEffect(() => {
+    let mounted = true
+    ffmpegPresentPromise ??= window.meowdler
+      .engineInfo()
+      .then((info) => info.ffmpegVersion !== null)
+      .catch(() => false)
+    void ffmpegPresentPromise.then((value) => {
+      if (mounted) setPresent(value)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [])
+  return present
+}
+
 function formatDuration(seconds: number | null): string | null {
   if (seconds === null) return null
   const text = formatEta(seconds)
@@ -468,7 +603,17 @@ function MediaFormCard({
   const [quality, setQuality] = useState<QualityPreset>(defaultPreset)
   const [preview, setPreview] = useState<MediaPreview | null>(null)
   const [busy, setBusy] = useState(false)
+  const ffmpegPresent = useFfmpegPresent()
   const toast = useToast()
+
+  // No ffmpeg: presets that depend on it cannot succeed — keep the choice
+  // valid instead of failing mid-download (once presence is known).
+  useEffect(() => {
+    if (ffmpegPresent === false && FFMPEG_REQUIRED_PRESETS.includes(quality)) {
+      setQuality('best')
+      toast('ffmpeg is missing — audio extraction is unavailable right now', 'info')
+    }
+  }, [ffmpegPresent])
 
   const message = (error: unknown): string => {
     const text = errorText(error)
@@ -522,8 +667,15 @@ function MediaFormCard({
               value={quality}
             >
               {presets.map((preset) => (
-                <option key={preset} value={preset}>
-                  {PRESET_LABEL[preset]}
+                <option
+                  disabled={ffmpegPresent === false && FFMPEG_REQUIRED_PRESETS.includes(preset)}
+                  key={preset}
+                  value={preset}
+                >
+                  {PRESET_LABEL[preset] +
+                    (ffmpegPresent === false && FFMPEG_REQUIRED_PRESETS.includes(preset)
+                      ? ' · needs ffmpeg'
+                      : '')}
                 </option>
               ))}
             </select>
@@ -536,6 +688,12 @@ function MediaFormCard({
               </Button>
             </div>
           </div>
+          {ffmpegPresent === false ? (
+            <p className="card-text muted">
+              ffmpeg was not found on this system — audio extraction and stream merging are
+              unavailable until it is installed.
+            </p>
+          ) : null}
         </div>
       </section>
 

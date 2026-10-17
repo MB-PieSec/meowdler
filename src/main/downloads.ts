@@ -15,7 +15,7 @@ import {
 import { isFinalHistoryState } from '../shared/downloads'
 import { CONCURRENCY_MAX, CONCURRENCY_MIN, DEFAULT_CONCURRENCY } from '../shared/settings'
 import {
-  cookieArgsFor,
+  resolveCookieArgs,
   flatProbeToPreview,
   probeFlat,
   resolveFfmpegBinary,
@@ -84,17 +84,30 @@ export class DownloadManager {
   private readonly downloads = new Map<string, ManagedDownload>()
   private readonly emit: OnDownloadChange
   private readonly defaultOutDir: string
-  private readonly ytdlpBinary: string
+  /** Metadata probes currently running; part of the engine-busy count. */
+  private probes = 0
 
   constructor(emit: OnDownloadChange) {
     this.emit = emit
     this.defaultOutDir = path.join(app.getPath('downloads'), 'Meowdler')
-    this.ytdlpBinary = resolveYtDlpBinary()
     // Finished/failed/cancelled items from the previous session rejoin the
     // list (Queue + History views) without touching the worker pool.
     for (const item of readHistory()) {
       this.downloads.set(item.id, { item: { ...item }, child: null, lastError: null })
     }
+  }
+
+  /**
+   * Engine children alive right now (running downloads + open metadata
+   * probes). The engine updater blocks its swap while this is non-zero so
+   * the running binary is never replaced underneath yt-dlp.
+   */
+  engineBusyCount(): number {
+    let busy = this.probes
+    for (const d of this.downloads.values()) {
+      if (d.item.state === 'downloading') busy += 1
+    }
+    return busy
   }
 
   /** Effective output dir — the user's override from settings, else default. */
@@ -136,7 +149,16 @@ export class DownloadManager {
 
     let probe
     try {
-      probe = await probeFlat(this.ytdlpBinary, trimmed, cookieArgsFor(loadSettings().cookies))
+      this.probes += 1
+      try {
+        probe = await probeFlat(
+          resolveYtDlpBinary(),
+          trimmed,
+          resolveCookieArgs(loadSettings().cookies),
+        )
+      } finally {
+        this.probes -= 1
+      }
     } catch (error) {
       throw new DownloadError(error instanceof Error ? error.message : 'Metadata probe failed')
     }
@@ -275,9 +297,14 @@ export class DownloadManager {
       throw new DownloadError('That does not look like an http(s) URL')
     }
     try {
-      return flatProbeToPreview(
-        await probeFlat(this.ytdlpBinary, trimmed, cookieArgsFor(loadSettings().cookies)),
-      )
+      this.probes += 1
+      try {
+        return flatProbeToPreview(
+          await probeFlat(resolveYtDlpBinary(), trimmed, resolveCookieArgs(loadSettings().cookies)),
+        )
+      } finally {
+        this.probes -= 1
+      }
     } catch (error) {
       throw new DownloadError(error instanceof Error ? error.message : 'Metadata probe failed')
     }
@@ -344,6 +371,21 @@ export class DownloadManager {
   }
 
   private start(d: ManagedDownload): void {
+    // Pre-flight cookie args: a broken cookies.txt fails the item here,
+    // with the actionable reason, instead of running the engine without
+    // cookies (which it does silently — see validateCookieFile).
+    let extraArgs: string[]
+    try {
+      extraArgs = [...formatArgsFor(d.item.quality), ...resolveCookieArgs(loadSettings().cookies)]
+    } catch (error) {
+      d.item.state = 'failed'
+      d.item.stage = 'download'
+      d.item.error = error instanceof Error ? error.message : 'Cookies configuration is invalid'
+      d.item.finishedAt = Date.now()
+      this.emit({ ...d.item })
+      this.writeLedger()
+      return
+    }
     d.item.state = 'downloading'
     d.item.stage = 'download'
     d.item.error = null
@@ -353,11 +395,11 @@ export class DownloadManager {
     this.emit({ ...d.item })
 
     const child = spawnYtDlpDownload({
-      binary: this.ytdlpBinary,
+      binary: resolveYtDlpBinary(),
       ffmpegBinary: resolveFfmpegBinary(),
       outDir: d.item.outDir,
       url: d.item.url,
-      extraArgs: [...formatArgsFor(d.item.quality), ...cookieArgsFor(loadSettings().cookies)],
+      extraArgs,
       handlers: {
         onStreamStart: () => {
           // A new format leg (video / audio) restarts yt-dlp's counters —

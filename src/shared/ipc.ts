@@ -34,10 +34,16 @@ export const IPC_CHANNELS = {
   // -- Engine auth (cookies file picker) -----------------------------------------
   /** Renderer asks: open a native file dialog for a cookies.txt file. */
   dialogCookies: 'dialog:cookies',
+  /** Renderer asks: validate a cookies.txt path before saving it into settings. */
+  appCookiesFileCheck: 'app:cookies-file-check',
   /** Renderer asks: open a native folder dialog for the download folder. */
   dialogDownloadDir: 'dialog:download-dir',
   /** Renderer asks: yt-dlp / ffmpeg versions of the live engine. */
   appEngineInfo: 'app:engine-info',
+  /** Renderer asks: a quiet engine (yt-dlp) update check against GitHub. */
+  appEngineUpdateCheck: 'app:engine-update-check',
+  /** Renderer asks: download + verify + swap in a newer engine build. */
+  appEngineUpdateInstall: 'app:engine-update-install',
 
   // -- Downloads (Phase 2 engine) ------------------------------------------------
   /** Renderer asks: probe a URL and enqueue it for download. */
@@ -86,14 +92,48 @@ export interface PingResponse {
 /** Payload broadcast on `IPC_CHANNELS.winMaximizedChanged`. */
 export type MaximizedPayload = boolean
 
+/** Where the yt-dlp binary in use came from (echoed in Settings). */
+export type EngineSource = 'self-updated' | 'bundled' | 'path'
+
 /** Versions of the packaged engine pieces, for the Settings page. */
 export interface EngineInfo {
   /** yt-dlp `--version` output; null when the binary could not be run. */
   ytdlpVersion: string | null
   /** ffmpeg first-line version; null when no system ffmpeg exists. */
   ffmpegVersion: string | null
-  /** True when the yt-dlp binary shipped with the app (not PATH fallback). */
-  ytdlpBundled: boolean
+  /** How the yt-dlp binary was resolved (install dir vs updater copy). */
+  ytdlpSource: EngineSource
+  /**
+   * JavaScript runtime yt-dlp uses for YouTube's anti-bot challenges,
+   * e.g. "Deno 2.9.7" (bundled) or "Node v24.21.0"; null when none is
+   * available, in which case YouTube extraction is expected to fail.
+   */
+  jsRuntime: string | null
+  /** Result of the latest engine-update check; null until one ran. */
+  update: EngineUpdateStatus | null
+}
+
+/** Last engine-update check, shown in Settings → Engine. */
+export interface EngineUpdateStatus {
+  checkedAt: number
+  latestVersion: string | null
+  status: 'up-to-date' | 'available' | 'error'
+  /** Error detail when status is 'error'. */
+  error: string | null
+}
+
+/** Result of an engine-update check / install attempt. */
+export interface EngineUpdateOutcome {
+  /** up-to-date · available · installed · blocked · error */
+  mode: 'up-to-date' | 'available' | 'installed' | 'blocked' | 'error'
+  /** Version string of the yt-dlp binary currently resolved. */
+  currentVersion: string | null
+  /** Latest official release tag, when one was read. */
+  latestVersion: string | null
+  /** Actionable explanation (e.g. "engine is in use"), null when clean. */
+  note: string | null
+  /** Technical failure detail, null when clean. */
+  error: string | null
 }
 
 /** Result of one update check through electron-updater. */

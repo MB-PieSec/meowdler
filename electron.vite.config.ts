@@ -7,6 +7,11 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
+    // Sandboxed preloads must be CommonJS: emit a .js entry the sandboxed
+    // wrapper can require (ESM preloads require `sandbox: false`).
+    build: {
+      rolldownOptions: { output: { format: 'cjs', entryFileNames: '[name].js' } },
+    },
   },
   renderer: {
     plugins: [react()],

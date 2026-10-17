@@ -12,35 +12,78 @@ import {
 } from './progress'
 import type { MediaPreview } from '../shared/downloads'
 import type { EngineInfo } from '../shared/ipc'
-import type { CookieSettings } from '../shared/settings'
+import type { CookieFileStatus, CookieSettings } from '../shared/settings'
 
 /**
  * Finds a JavaScript runtime for yt-dlp's EJS engine. Recent yt-dlp releases
  * need one to evaluate YouTube's client-side anti-bot challenges; without it,
  * extraction degrades to "The page needs to be reloaded" / "Sign in to
  * confirm you're not a bot" errors and missing formats — even with valid
- * cookies. GUI-launched apps rarely share the user's shell PATH, so Node
- * installed via nvm / Homebrew is searched explicitly. Verified live: with a
- * runtime found, the exact URLs that previously failed extract cleanly.
+ * cookies. Deno is yt-dlp's first-choice runtime (its `--help` lists
+ * runtimes "deno, node, quickjs, bun" and only deno is enabled by default),
+ * so a per-platform Deno binary ships inside every installer and is probed
+ * before any fallback: a userData copy (repairable), then the bundled copy,
+ * then Node installs (nvm / nvm-windows / Homebrew / system / PATH) for
+ * older setups.
  *
- * Result is cached per process; `null` means no usable runtime exists
- * (extraction simply runs degraded, as before this helper).
+ * Result is cached per process; `null` mean no usable runtime exists and
+ * the engine runs degraded — the UI surfaces that in Settings and in
+ * download-error hints instead of failing silently.
  */
-let cachedRuntime: string | null | undefined
+export interface RuntimeInfo {
+  /** Value passed to `--js-runtimes` (`deno:<path>` / `node:<path>`), or null. */
+  enabled: string | null
+  /** Where the runtime came from. */
+  source: 'deno-bundled' | 'deno-user' | 'node' | null
+  /** Short human label, e.g. "Deno 2.9.7" / "Node v24.21.0"; null when absent. */
+  label: string | null
+}
 
-export function resolveJsRuntime(): string | null {
-  if (cachedRuntime !== undefined) return cachedRuntime
+let cachedRuntimeInfo: RuntimeInfo | undefined
 
-  const home = app.getPath('home')
-  const candidates: string[] = []
+function probeRuntime(binary: string): string | null {
+  const check = spawnSync(binary, ['--version'], { timeout: 5000, encoding: 'utf8' })
+  if (check.status !== 0) return null
+  const version = (check.stdout ?? '').split(/\r?\n/)[0]?.trim() ?? ''
+  return version.length > 0 ? version : null
+}
 
-  const push = (candidate: string | undefined): void => {
-    if (typeof candidate === 'string' && candidate.length > 0 && fs.existsSync(candidate)) {
-      candidates.push(candidate)
+export function resolveJsRuntimeInfo(): RuntimeInfo {
+  if (cachedRuntimeInfo !== undefined) return cachedRuntimeInfo
+
+  const runtimeSuffix = process.platform === 'win32' ? '.exe' : ''
+  const denoCandidates: readonly (readonly ['deno-user' | 'deno-bundled', string])[] = [
+    ['deno-user', path.join(app.getPath('userData'), 'runtime', `deno${runtimeSuffix}`)],
+    [
+      'deno-bundled',
+      app.isPackaged
+        ? path.join(process.resourcesPath, `deno${runtimeSuffix}`)
+        : path.join(app.getAppPath(), 'resources', `deno${runtimeSuffix}`),
+    ],
+  ]
+
+  for (const [source, candidate] of denoCandidates) {
+    if (fs.existsSync(candidate) === false) continue
+    const version = probeRuntime(candidate)
+    if (version === null) continue
+    const major = /deno\s+([\d.]+)/.exec(version)?.[1]
+    cachedRuntimeInfo = {
+      enabled: `deno:${candidate}`,
+      source,
+      label: major === undefined ? 'Deno' : `Deno ${major}`,
     }
+    return cachedRuntimeInfo
   }
 
-  // Node version managers (GUI launches don't inherit the shell's PATH)
+  // Node fallbacks for setups predating the bundled Deno. GUI launches don't
+  // inherit the shell's PATH, so version managers are searched explicitly.
+  const home = app.getPath('home')
+  const nodeCandidates: string[] = []
+  const push = (candidate: string | undefined): void => {
+    if (typeof candidate === 'string' && candidate.length > 0 && fs.existsSync(candidate)) {
+      nodeCandidates.push(candidate)
+    }
+  }
   const nvmUnix = path.join(home, '.nvm', 'versions', 'node')
   try {
     for (const version of fs.readdirSync(nvmUnix)) {
@@ -60,43 +103,64 @@ export function resolveJsRuntime(): string | null {
       /* no nvm-windows */
     }
   }
-
-  // Standalone installs
   push('/usr/bin/node')
   push('/usr/local/bin/node')
   push('/opt/homebrew/bin/node')
   push('C:\\Program Files\\nodejs\\node.exe')
+  nodeCandidates.push('node')
 
-  // Whatever PATH the app inherited (covers manual installs)
-  candidates.push('node')
-
-  for (const candidate of candidates) {
-    const check = spawnSync(candidate, ['--version'], { timeout: 5000, encoding: 'utf8' })
-    if (check.status === 0) {
-      cachedRuntime = `node:${candidate}`
-      return cachedRuntime
-    }
+  for (const candidate of nodeCandidates) {
+    const version = probeRuntime(candidate)
+    if (version === null) continue
+    cachedRuntimeInfo = { enabled: `node:${candidate}`, source: 'node', label: `Node ${version}` }
+    return cachedRuntimeInfo
   }
-  cachedRuntime = null
-  return null
+
+  cachedRuntimeInfo = { enabled: null, source: null, label: null }
+  return cachedRuntimeInfo
 }
 
 /** Engine args enabling the JS runtime (empty when none was found). */
 export function jsRuntimeArgs(): string[] {
-  const runtime = resolveJsRuntime()
+  const runtime = resolveJsRuntimeInfo().enabled
   return runtime === null ? [] : ['--js-runtimes', runtime]
 }
 
 /**
  * Rewrites known engine auth walls into actionable hints instead of raw
- * channel-supported errors the user cannot act on.
+ * channel-supported errors the user cannot act on. When no JavaScript
+ * runtime is available at all, every wall hint mentions it — YouTube fails
+ * out of the box in that state, with or without cookies. Signature-style
+ * extraction failures ("unable to extract", nsig breaks) typically mean the
+ * platform loader moved; the engine receives an update suggestion.
  */
 export function withEngineHint(message: string): string {
+  const runtimeMissing = resolveJsRuntimeInfo().enabled === null
+  const runtimeNote = runtimeMissing
+    ? ' (also: the JavaScript runtime that YouTube needs is missing in this install — reinstalling Meowdler restores the bundled Deno)'
+    : ''
   if (/sign in to confirm/i.test(message)) {
-    return `${message} — Fix: Settings → Cookies → use your browser or a fresh cookies.txt`
+    return `${message} — Fix: Settings → Cookies → use your browser or a fresh cookies.txt${runtimeNote}`
   }
   if (/needs to be reloaded/i.test(message)) {
-    return `${message} — Fix: the engine needs a JavaScript runtime (Node.js). Meowdler auto-detects common installs; restarting after installing Node lets it recover`
+    return `${message} — Fix: the engine needs a JavaScript runtime (a Deno copy ships inside the installer; a Node.js install also works)${runtimeNote}`
+  }
+  if (/unable to extract|nsig extraction failed|no video formats found/i.test(message)) {
+    return `${message} — Fix: the platform loader likely changed since this engine build; try Settings → Engine → Check engine updates`
+  }
+  if (/ffmpeg/i.test(message)) {
+    return `${message} — Fix: ffmpeg is missing, so merging and audio extraction cannot run — install it (or reinstall Meowdler; both ship a copy) and retry`
+  }
+  // Cookie-store failures (mainly browser mode): the quoted paths and
+  // browser names are platform-specific, so match loosely.
+  if (/could not find \S+ cookies database/i.test(message)) {
+    return `${message} — Fix: that browser isn't installed where the engine looks — pick another browser in Settings → Cookies, or switch to a cookies.txt file`
+  }
+  if (/could not copy .* cookies|database is locked|cookie store is locked/i.test(message)) {
+    return `${message} — Fix: that browser seems to be running with a locked cookie store / fresh encryption — close it fully and retry, or use a cookies.txt file in Settings → Cookies`
+  }
+  if (/does not look like a Netscape format cookies file/i.test(message)) {
+    return `${message} — Fix: re-export a Netscape-format cookies.txt with a “Get cookies.txt” browser extension and pick it again in Settings → Cookies`
   }
   return message
 }
@@ -132,32 +196,74 @@ function firstLine(binary: string, args: readonly string[]): Promise<string | nu
  */
 
 /**
- * Resolves the bundled binary. Packaged builds ship it next to the app in
- * `resources/`; in development it sits in the repo's `resources/` directory.
- * Falls back to `yt-dlp` on PATH when the bundle is missing.
+ * Resolves the yt-dlp binary. Priority: a self-updated copy in
+ * `userData/runtime/` (written by the engine updater, validated before
+ * install), then the bundled copy next to the app in `resources/`
+ * (packaged) or the repo's `resources/` (development), finally `yt-dlp` on
+ * PATH. No caching — an engine update must take effect on the next spawn.
  */
 export function resolveYtDlpBinary(): string {
-  const bundled = app.isPackaged
-    ? path.join(process.resourcesPath, 'yt-dlp')
-    : path.join(app.getAppPath(), 'resources', 'yt-dlp')
-  if (fs.existsSync(bundled)) return bundled
+  const suffix = process.platform === 'win32' ? '.exe' : ''
+  const names = suffix === '.exe' ? ['yt-dlp.exe', 'yt-dlp'] : ['yt-dlp']
+  const dirs = [
+    path.join(app.getPath('userData'), 'runtime'),
+    app.isPackaged ? process.resourcesPath : app.getAppPath(),
+    path.join(app.getAppPath(), 'resources'),
+  ]
+  for (const dir of dirs) {
+    for (const name of names) {
+      const candidate = path.join(dir, name)
+      if (fs.existsSync(candidate)) return candidate
+    }
+  }
   return 'yt-dlp'
 }
 
+/** Where the engine updater installs the self-updated copy. */
+export function updatedEngineBinaryPath(): string {
+  return path.join(
+    app.getPath('userData'),
+    'runtime',
+    process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
+  )
+}
+
+/** Describes where a resolved engine binary lives (for the Settings row). */
+export function engineBinarySource(binary: string): 'self-updated' | 'bundled' | 'path' {
+  const runtimeDir = path.dirname(updatedEngineBinaryPath())
+  if (path.dirname(binary) === runtimeDir) return 'self-updated'
+  if (binary !== 'yt-dlp') return 'bundled'
+  return 'path'
+}
+
 /**
- * ffmpeg, in priority order: bundled (packaged `resources/`), the repo copy
- * under development, then the system binary. yt-dlp only needs the location.
+ * ffmpeg, in priority order: the copy shipped next to the app (packaged
+ * `resources/`), the repo copy under development, then conventional install
+ * locations on each OS, finally whatever the OS PATH resolves (bare
+ * `ffmpeg`; yt-dlp inherits the same environment). Windows also requires the
+ * `.exe` extension — an extensionless copy cannot be executed there.
  */
 export function resolveFfmpegBinary(): string | null {
-  const candidates = [
-    app.isPackaged ? path.join(process.resourcesPath, 'ffmpeg') : null,
-    path.join(app.getAppPath(), 'resources', 'ffmpeg'),
-    '/usr/bin/ffmpeg',
+  const suffixes = process.platform === 'win32' ? ['.exe'] : ['']
+  const packageDir = app.isPackaged
+    ? process.resourcesPath
+    : path.join(app.getAppPath(), 'resources')
+  const dirs = [
+    packageDir,
+    path.join(app.getAppPath(), 'resources'),
+    '/usr/bin',
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
   ]
-  for (const candidate of candidates) {
-    if (candidate !== null && fs.existsSync(candidate)) return candidate
+  for (const dir of dirs) {
+    for (const suffix of suffixes) {
+      const candidate = path.join(dir, `ffmpeg${suffix}`)
+      if (fs.existsSync(candidate)) return candidate
+    }
   }
-  return null
+  // PATH fallback: a quick executable probe, same environment yt-dlp gets.
+  const probe = spawnSync('ffmpeg', ['-version'], { timeout: 5000, stdio: 'ignore' })
+  return probe.status === 0 ? 'ffmpeg' : null
 }
 
 const PROBE_TIMEOUT_MS = 30_000
@@ -240,6 +346,72 @@ export function cookieArgsFor(cards: CookieSettings): string[] {
 }
 
 /**
+ * Validates one cookies.txt before it reaches the engine. The engine
+ * silently ignores missing and unreadable files (downloads just proceed
+ * without cookies), so file-mode problems must be caught app-side.
+ * Accepts what yt-dlp accepts: a `# Netscape` header, or any data line
+ * with the seven tab-separated cookie fields.
+ */
+export function validateCookieFile(filePath: string): CookieFileStatus {
+  let stats: fs.Stats
+  try {
+    stats = fs.statSync(filePath)
+  } catch {
+    return { status: 'missing' }
+  }
+  if (!stats.isFile()) return { status: 'missing' }
+  let head: string
+  try {
+    const handle = fs.openSync(filePath, 'r')
+    try {
+      const buffer = Buffer.alloc(65536)
+      const read = fs.readSync(handle, buffer, 0, buffer.length, 0)
+      head = buffer.subarray(0, read).toString('utf8')
+    } finally {
+      fs.closeSync(handle)
+    }
+  } catch {
+    return { status: 'unreadable' }
+  }
+  for (const line of head.split(/\r?\n/)) {
+    if (line.startsWith('# Netscape HTTP Cookie File')) return { status: 'ok' }
+    if (line.split('\t').length === 7 && line.trim().length > 0) return { status: 'ok' }
+  }
+  return { status: 'format' }
+}
+
+/**
+ * Cookie args with pre-spawn validation. Throws a user-actionable error
+ * instead of silently downloading without cookies when file mode is
+ * broken; browser mode stays pass-through (the engine's own stderr is
+ * mapped into hints there — its search paths are platform-specific).
+ */
+export function resolveCookieArgs(cards: CookieSettings): string[] {
+  if (cards.mode === 'file' && cards.file !== null) {
+    const status = validateCookieFile(cards.file).status
+    if (status === 'missing') {
+      throw new Error(
+        'The chosen cookies file is gone or unreadable — pick it again in Settings → Cookies',
+      )
+    }
+    if (status === 'unreadable') {
+      throw new Error(
+        'The chosen cookies file cannot be read (permissions?) — re-save or re-pick it in Settings → Cookies',
+      )
+    }
+    if (status === 'format') {
+      throw new Error(
+        'The chosen cookies file is not in Netscape format — re-export it with a “Get cookies.txt” extension (Settings → Cookies)',
+      )
+    }
+  }
+  if (cards.mode === 'file' && cards.file === null) {
+    throw new Error('Cookies are set to file mode, but no file is chosen — Settings → Cookies')
+  }
+  return cookieArgsFor(cards)
+}
+
+/**
  * Probes a URL with `--flat-playlist --dump-single-json`. Single videos come
  * back complete; playlists return flat entries (no per-video network cost).
  * `--no-playlist` keeps links-to-playlists inside watch pages as one video.
@@ -260,6 +432,8 @@ export function probeFlat(
         '--skip-download',
         ...jsRuntimeArgs(),
         ...extraArgs,
+        // `--` ends option parsing so a URL can never be read as a flag.
+        '--',
         url,
       ],
       { stdio: ['ignore', 'pipe', 'pipe'] },
@@ -407,7 +581,8 @@ export function spawnYtDlpDownload(options: {
     args.push('--ffmpeg-location', ffmpegBinary)
   }
   args.push(...jsRuntimeArgs())
-  args.push('-o', path.join(outDir, '%(title)s [%(id)s].%(ext)s'), url)
+  // `--` ends option parsing so a URL can never be read as a flag.
+  args.push('-o', path.join(outDir, '%(title)s [%(id)s].%(ext)s'), '--', url)
 
   const child: ChildProcess = spawn(binary, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -439,8 +614,7 @@ export function spawnYtDlpDownload(options: {
   return child
 }
 
-/**
- * Reads yt-dlp and ffmpeg versions for the Settings page. Never throws —
+/** Reads yt-dlp and ffmpeg versions for the Settings page. Never throws —
  * any failure means `null` for that piece.
  */
 export async function readEngineVersions(): Promise<EngineInfo> {
@@ -455,6 +629,8 @@ export async function readEngineVersions(): Promise<EngineInfo> {
   return {
     ytdlpVersion,
     ffmpegVersion,
-    ytdlpBundled: binary !== 'yt-dlp',
+    ytdlpSource: engineBinarySource(binary),
+    jsRuntime: resolveJsRuntimeInfo().label,
+    update: null, // merged in by the IPC layer from the updater's cache
   }
 }

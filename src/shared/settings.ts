@@ -42,6 +42,17 @@ export interface CookieSettings {
   browser: CookieBrowser | null
 }
 
+/** App-side cookies.txt validation result (before it reaches the engine). */
+export interface CookieFileStatus {
+  /**
+   * `ok` = readable and Netscape-shaped; `missing` = gone / not a file;
+   * `unreadable` = exists but cannot be read; `format` = wrong shape.
+   * The engine itself ignores missing/unreadable files silently, so these
+   * must never be handed to yt-dlp.
+   */
+  status: 'ok' | 'missing' | 'unreadable' | 'format'
+}
+
 /** Parallel download limits — the worker pool reads this live. */
 export const CONCURRENCY_MIN = 1
 export const CONCURRENCY_MAX = 4

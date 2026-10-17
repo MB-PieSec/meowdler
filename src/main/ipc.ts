@@ -2,16 +2,19 @@ import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import {
   IPC_CHANNELS,
   type EngineInfo,
+  type EngineUpdateOutcome,
   type MaximizedPayload,
   type PingResponse,
   type UpdateCheckOutcome,
 } from '../shared/ipc'
 import type { DownloadItem, MediaPreview, SubmitResult } from '../shared/downloads'
 import { parseDownloadOptions } from '../shared/downloads'
-import { parseSettings, type AppSettings } from '../shared/settings'
+import { parseSettings, type AppSettings, type CookieFileStatus } from '../shared/settings'
+import { validateCookieFile } from './ytdlp'
 import { DownloadError, type DownloadManager } from './downloads'
 import { loadSettings, saveSettings } from './settings'
 import { readEngineVersions } from './ytdlp'
+import { checkEngineUpdate, engineUpdateStatus, installEngineUpdate } from './engine-updater'
 import { runUpdateCheck } from './updater'
 
 /** Any event carrying a `sender` web contents. */
@@ -55,6 +58,15 @@ export function registerIpcChannels(manager: DownloadManager): void {
     return result.canceled ? null : (result.filePaths[0] ?? null)
   })
 
+  ipcMain.handle(
+    IPC_CHANNELS.appCookiesFileCheck,
+    (_event, filePath: unknown): CookieFileStatus => {
+      // Wire input is untrusted: only plain non-empty paths are checked.
+      if (typeof filePath !== 'string' || filePath.length === 0) return { status: 'missing' }
+      return validateCookieFile(filePath)
+    },
+  )
+
   ipcMain.handle(IPC_CHANNELS.dialogDownloadDir, async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       title: 'Choose the download folder',
@@ -64,7 +76,19 @@ export function registerIpcChannels(manager: DownloadManager): void {
   })
 
   ipcMain.handle(IPC_CHANNELS.appEngineInfo, async (): Promise<EngineInfo> => {
-    return readEngineVersions()
+    // The engine-update readout (cached, quiet check) rides along here so
+    // the Settings card can refresh engine version + update state together.
+    return { ...(await readEngineVersions()), update: engineUpdateStatus() }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.appEngineUpdateCheck, async (): Promise<EngineUpdateOutcome> => {
+    return checkEngineUpdate()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.appEngineUpdateInstall, async (): Promise<EngineUpdateOutcome> => {
+    // The swap is blocked while any engine child (download or probe) runs;
+    // the manager's busy count is the source of truth.
+    return installEngineUpdate(() => manager.engineBusyCount())
   })
 
   ipcMain.handle(

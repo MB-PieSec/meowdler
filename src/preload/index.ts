@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IPC_CHANNELS,
   type EngineInfo,
+  type EngineUpdateOutcome,
   type MaximizedPayload,
   type PingResponse,
   type UpdateCheckOutcome,
@@ -13,7 +14,7 @@ import type {
   MediaPreview,
   SubmitResult,
 } from '../shared/downloads'
-import type { AppSettings } from '../shared/settings'
+import type { AppSettings, CookieFileStatus } from '../shared/settings'
 import type { MeowdlerApi } from '../shared/api'
 
 /** The complete renderer-facing API, exposed safely via the context bridge. */
@@ -62,10 +63,19 @@ const meowdlerApi = {
 
   pickCookiesFile: (): Promise<string | null> => ipcRenderer.invoke(IPC_CHANNELS.dialogCookies),
 
+  checkCookiesFile: (filePath: string): Promise<CookieFileStatus> =>
+    ipcRenderer.invoke(IPC_CHANNELS.appCookiesFileCheck, filePath),
+
   pickDownloadFolder: (): Promise<string | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.dialogDownloadDir),
 
   engineInfo: (): Promise<EngineInfo> => ipcRenderer.invoke(IPC_CHANNELS.appEngineInfo),
+
+  checkEngineUpdate: (): Promise<EngineUpdateOutcome> =>
+    ipcRenderer.invoke(IPC_CHANNELS.appEngineUpdateCheck),
+
+  installEngineUpdate: (): Promise<EngineUpdateOutcome> =>
+    ipcRenderer.invoke(IPC_CHANNELS.appEngineUpdateInstall),
 
   checkForUpdates: (prompt: boolean): Promise<UpdateCheckOutcome> =>
     ipcRenderer.invoke(IPC_CHANNELS.appUpdateCheck, prompt),
