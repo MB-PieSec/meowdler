@@ -559,9 +559,11 @@ function MediaFormCard({
               <Chip tone="accent">{preview.kind === 'playlist' ? 'Playlist' : 'Video'}</Chip>
             </div>
           </div>
-          <Button onClick={download} small>
-            Download
-          </Button>
+          <div className="preview-footer">
+            <Button onClick={download} small>
+              Download
+            </Button>
+          </div>
         </section>
       ) : null}
     </>
@@ -680,7 +682,15 @@ function statusLine(item: DownloadItem): string {
 }
 
 function DownloadRow({ item }: { item: DownloadItem }): JSX.Element {
-  const { pause, resume, cancel, retry, remove, reveal } = useDownloads()
+  const { pause, resume, cancel, retry, remove, reveal, open } = useDownloads()
+  const toast = useToast()
+
+  const openFile = (): void => {
+    void open(item.id).catch((error: unknown) => {
+      toast(errorText(error), 'danger')
+    })
+  }
+
   return (
     <div className="download-row">
       <div className="dl-header">
@@ -726,6 +736,9 @@ function DownloadRow({ item }: { item: DownloadItem }): JSX.Element {
           ) : null}
           {item.state === 'completed' ? (
             <>
+              <Button onClick={openFile} small title="Open file">
+                Open
+              </Button>
               <Button onClick={() => reveal(item.id)} small title="Show in folder" variant="ghost">
                 Show in folder
               </Button>

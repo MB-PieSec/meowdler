@@ -146,10 +146,21 @@
   color: var(--text);
 }
 
+.preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .preview-card .preview-body {
   display: flex;
   gap: 16px;
   align-items: flex-start;
+}
+
+.preview-footer {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .preview-thumb {
