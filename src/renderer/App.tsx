@@ -48,7 +48,8 @@ function Shell(): JSX.Element {
             if (outcome.installing) {
               toast(`Downloading ${outcome.latestVersion} — the app restarts once ready`, 'success')
             } else {
-              // Format without self-install (deb): main opened the releases page.
+              // Format without self-install (deb, unsigned macOS): main
+              // opened the releases page.
               toast(
                 `Version ${outcome.latestVersion} available — opening the releases page`,
                 'info',

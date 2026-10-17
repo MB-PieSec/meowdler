@@ -17,8 +17,15 @@ const { autoUpdater } = updaterPackage
  * Behaviors per environment:
  *  - dev            → never prompts; `mode: 'dev'`
  *  - deb / tarball  → feed is still probed, but "install" opens the releases
- *                     page (those formats cannot self-update safely)
- *  - nsis / dmg|zip / AppImage → download + relaunch on consent
+ *                     page (deliberate policy — electron-updater 6.x's
+ *                     DebUpdater shells out to dpkg/apt with a sudo prompt,
+ *                     which we don't want mid-GUI)
+ *  - macOS          → same, because the builds are unsigned: Squirrel.Mac
+ *                     (which MacUpdater pipes through) requires signed apps,
+ *                     so an offered install would fail at its last step
+ *                     (electron docs: "must be signed for automatic updates
+ *                     on macOS")
+ *  - nsis / AppImage → download + relaunch on consent
  */
 
 export const RELEASES_PAGE_URL = 'https://github.com/MB-PieSec/meowdler/releases/latest'
@@ -30,7 +37,7 @@ let inFlight = false
 /** Formats electron-updater can install in place. */
 function supportsSelfInstall(): boolean {
   if (process.platform === 'win32') return true
-  if (process.platform === 'darwin') return true
+  if (process.platform === 'darwin') return false // unsigned: see header comment
   if (process.platform === 'linux') {
     return process.env.APPIMAGE !== undefined || process.env.SNAP !== undefined
   }
