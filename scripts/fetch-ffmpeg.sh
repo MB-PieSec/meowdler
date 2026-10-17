@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Optional helper: stages a system ffmpeg beside the bundled yt-dlp so the
-# packaged app is self-contained. Without it, Meowdler falls back to
-# /usr/bin/ffmpeg. Muxing needs the binary only (GPL build is fine to copy).
+# Dev-only helper: stages your system ffmpeg beside the bundled yt-dlp for
+# local development (`npm run dist` on this machine). Release CI does NOT use
+# this — it downloads statically linked builds (BtbN LGPL on Linux, static
+# martin-riedl.de Apple Silicon macOS build, gyan.dev essentials on Windows)
+# pinned and checksum-verified, because a distro ffmpeg is dynamically linked
+# and would not run on a user's machine — it can even shadow a working
+# system ffmpeg, since the app only checks for the file's existence.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

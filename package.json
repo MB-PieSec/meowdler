@@ -38,6 +38,14 @@
           "deno",
           "deno.exe"
         ]
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "third-party/THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "LICENSES",
+        "to": "third-party/licenses"
       }
     ],
     "linux": {

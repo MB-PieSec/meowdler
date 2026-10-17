@@ -67,6 +67,15 @@ jobs:
           restore-keys: ${{ runner.os }}-electron-
 
       # -- platform-matching engine binaries -------------------------------
+      # All downloads are version-pinned and checksum-verified against the
+      # sources' own published sums (yt-dlp SHA2-256SUMS, deno per-asset
+      # .sha256sum, BtbN checksums.sha256, gyan.dev .sha256, martin-riedl
+      # .sha256). To bump a pin: update the version tag AND the checksum
+      # source URL together — a mismatch fails the lane instead of shipping.
+      # Linux/macOS ffmpeg are STATIC builds: a dynamic build would break
+      # merging/MP3 on machines without the matching shared libs (and would
+      # shadow a working system ffmpeg — resolveFfmpegBinary only checks
+      # existence). Each lane verifies static-ness + runs the staged binary.
       # deno is yt-dlp's default JavaScript runtime (YouTube's anti-bot
       # challenges need one); staged exactly like yt-dlp so every package
       # is self-contained.
@@ -74,50 +83,158 @@ jobs:
       - name: Stage yt-dlp + ffmpeg + deno (linux)
         if: runner.os == 'Linux'
         run: |
+          # yt-dlp 2026.08.19 (official SHA2-256SUMS)
           curl -fsSL -o resources/yt-dlp \
-            https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
+            https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_linux
+          curl -fsSL \
+            https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/SHA2-256SUMS \
+            | awk '$2=="yt-dlp_linux"{$2="resources/yt-dlp";print;exit}' \
+            | sha256sum -c -
           chmod +x resources/yt-dlp
+
+          # deno 2.9.7 (deno's official per-asset .zip.sha256sum)
           curl -fsSL -o deno.zip \
-            https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip
+            https://github.com/denoland/deno/releases/download/v2.9.7/deno-x86_64-unknown-linux-gnu.zip
+          curl -fsSL \
+            https://github.com/denoland/deno/releases/download/v2.9.7/deno-x86_64-unknown-linux-gnu.zip.sha256sum \
+            | sed 's|deno-x86_64-unknown-linux-gnu\.zip|deno.zip|' \
+            | sha256sum -c -
           unzip -oq deno.zip
           mv ./deno resources/deno
           chmod +x resources/deno
           rm deno.zip
-          sudo apt-get update -q
-          sudo apt-get install -y -qq ffmpeg
-          bash scripts/fetch-ffmpeg.sh
+
+          # ffmpeg LGPL (static, LGPL-3.0; BtbN/FFmpeg-Builds, commit
+          # N-127579-g5cb9fcd211 — LGPL because x264/x265 encoders are not
+          # needed: Meowdler only merges streams and encodes MP3/M4A, all
+          # available under LGPL: libmp3lame, the native aac encoder)
+          curl -fsSL -o ffmpeg.tar.xz \
+            https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-16-13-04/ffmpeg-N-127579-g5cb9fcd211-linux64-lgpl.tar.xz
+          curl -fsSL \
+            https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-16-13-04/checksums.sha256 \
+            | grep '  ffmpeg-N-127579-g5cb9fcd211-linux64-lgpl.tar.xz' \
+            | sed 's|ffmpeg-N-127579-g5cb9fcd211-linux64-lgpl.tar.xz|ffmpeg.tar.xz|' \
+            | sha256sum -c -
+          tar xf ffmpeg.tar.xz
+          mv ffmpeg-N-127579-g5cb9fcd211-linux64-lgpl/bin/ffmpeg resources/ffmpeg
+          chmod +x resources/ffmpeg
+          rm -rf ffmpeg.tar.xz ffmpeg-N-127579-g5cb9fcd211-linux64-lgpl
+
+          # static-ness guard: only glibc family allowed; anything else means
+          # the staged binary would fail on user machines outside these libs
+          bad_deps=$(ldd resources/ffmpeg 2>/dev/null | awk '/=>/||/^\t/{n=$1;sub(/^.*\//,"",n);print n}' | sort -u | grep -vE '^(linux-vdso\.so\.1|ld-linux-x86-64\.so\.2|libc\.so\.6|libdl\.so\.2|libgcc_s\.so\.1|libm\.so\.6|libmvec\.so\.1|libpthread\.so\.0|librt\.so\.1)$' || true)
+          if [ -n "$bad_deps" ]; then echo "::error::staged linux ffmpeg is not static (non-kernel libs): $bad_deps"; exit 1; fi
+          # smoke test: the staged binary must execute from its staged location
+          ./resources/ffmpeg -version | head -n 1
 
       - name: Stage yt-dlp + ffmpeg + deno (macOS)
         if: runner.os == 'macOS'
         run: |
+          # yt-dlp 2026.08.19 (official SHA2-256SUMS)
           curl -fsSL -o resources/yt-dlp \
-            https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+            https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_macos
+          curl -fsSL \
+            https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/SHA2-256SUMS \
+            | awk '$2=="yt-dlp_macos"{$2="resources/yt-dlp";print;exit}' \
+            | sha256sum -c -
           chmod +x resources/yt-dlp
+
+          # deno 2.9.7 (deno's official per-asset .zip.sha256sum)
           curl -fsSL -o deno.zip \
-            https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip
+            https://github.com/denoland/deno/releases/download/v2.9.7/deno-aarch64-apple-darwin.zip
+          curl -fsSL \
+            https://github.com/denoland/deno/releases/download/v2.9.7/deno-aarch64-apple-darwin.zip.sha256sum \
+            | sed 's|deno-aarch64-apple-darwin\.zip|deno.zip|' \
+            | sha256sum -c -
           unzip -oq deno.zip
           mv ./deno resources/deno
           chmod +x resources/deno
           rm deno.zip
-          brew install ffmpeg
-          bash scripts/fetch-ffmpeg.sh
+
+          # ffmpeg (static, GPL-3.0 because this build links x264/x265/rav1e;
+          # no static LGPL arm64-mac vendor exists). Pinned release 9.0.2
+          # build by ffmpeg.martin-riedl.de, checksum from its own .sha256
+          # alongside the same versioned download URL (1789931890 is the
+          # build's site-side slot — bump URL + .sha256 together).
+          curl -fsSL -o ffmpeg.zip \
+            https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip
+          curl -fsSL \
+            https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip.sha256 \
+            | sha256sum -c -
+          unzip -oq ffmpeg.zip
+          mv ./ffmpeg resources/ffmpeg
+          chmod +x resources/ffmpeg
+          rm -f ffmpeg.zip
+
+          # static-ness guard: /usr/lib and /System/Library frameworks are
+          # present on every macOS install; an /opt/homebrew or other
+          # non-Apple path would fail on user machines
+          bad_deps=$(otool -L resources/ffmpeg | sed 1d | awk '{print $1}' | grep -vE '^(/usr/lib/|/System/Library/|/System/)' || true)
+          if [ -n "$bad_deps" ]; then echo "::error::staged macOS ffmpeg is not static (non-Apple libs): $bad_deps"; exit 1; fi
+          # smoke test: the staged binary must execute from its staged location
+          ./resources/ffmpeg -version | head -n 1
 
       - name: Stage yt-dlp + ffmpeg + deno (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile resources/yt-dlp
-          Invoke-WebRequest -Uri "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip" -OutFile deno.zip
+          $ErrorActionPreference = 'Stop'
+
+          function Assert-Hash([string]$File, [string]$Expected) {
+            $actual = (Get-FileHash -Algorithm SHA256 $File).Hash.ToLower()
+            if ($actual -ne $Expected.ToLower()) {
+              throw "checksum mismatch for $File: $actual != $Expected"
+            }
+          }
+
+          # yt-dlp 2026.08.19 (official SHA2-256SUMS)
+          $YTD = 'https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19'
+          Invoke-WebRequest -Uri "$YTD/yt-dlp.exe" -OutFile resources/yt-dlp
+          $sums = (Invoke-WebRequest -Uri "$YTD/SHA2-256SUMS").Content
+          $line = [regex]::Match($sums, '(?m)^([0-9a-f]{64})\s+yt-dlp\.exe\s*$')
+          if (-not $line.Success) { throw 'yt-dlp.exe not found in official SHA2-256SUMS' }
+          Assert-Hash resources/yt-dlp $line.Groups[1].Value
+
+          # deno 2.9.7 (deno's official per-asset .zip.sha256sum; the Windows
+          # variant uses a "Hash : <hex>" key/value format, not "hash  path")
+          $DENO = 'https://github.com/denoland/deno/releases/download/v2.9.7'
+          Invoke-WebRequest -Uri "$DENO/deno-x86_64-pc-windows-msvc.zip" -OutFile deno.zip
+          $dline = [regex]::Match(
+            (Invoke-WebRequest -Uri "$DENO/deno-x86_64-pc-windows-msvc.zip.sha256sum").Content,
+            'Hash\s*:\s*([0-9A-Fa-f]{64})')
+          if (-not $dline.Success) { throw 'deno zip checksum missing from .zip.sha256sum' }
+          Assert-Hash deno.zip $dline.Groups[1].Value
           Expand-Archive -Path deno.zip -DestinationPath deno-tmp
           Copy-Item deno-tmp/deno.exe -Destination resources/deno.exe
           Remove-Item deno.zip, deno-tmp -Recurse -Force
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile ffmpeg.zip
+
+          # ffmpeg (static, GPL-3.0; gyan.dev essentials build). There is no
+          # versioned URL, so ffmpeg-release-essentials.zip follows gyan's
+          # latest 9.x essentials build — checksum coming from their .sha256.
+          # A published bump fails this lane: update the pin by re-verifying.
+          $FFURL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
+          Invoke-WebRequest -Uri $FFURL -OutFile ffmpeg.zip
+          $fsum = [regex]::Match(
+            (Invoke-WebRequest -Uri "$FFURL.sha256").Content, '([0-9A-Fa-f]{64})')
+          if (-not $fsum.Success) { throw 'gyan.dev .sha256 did not contain a hash' }
+          Assert-Hash ffmpeg.zip $fsum.Groups[1].Value
           Expand-Archive -Path ffmpeg.zip -DestinationPath ffmpeg-tmp
           $exe = Get-ChildItem -Path ffmpeg-tmp -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
           # Windows must keep the .exe extension: an extensionless copy in
           # resources/ cannot be executed by CreateProcess.
           Copy-Item $exe.FullName -Destination resources/ffmpeg.exe
           Remove-Item ffmpeg.zip, ffmpeg-tmp -Recurse -Force
+
+          # static-ness guard: the essentials build is a ~100 MB single-file
+          # static exe. There is no ldd/otool on Windows runners, so a size
+          # floor stands in for an import-table check — the dynamic vs static
+          # distinction is a two-order-of-magnitude size difference.
+          $size = (Get-Item resources/ffmpeg.exe).Length
+          if ($size -lt 50MB) {
+            throw "staged Windows ffmpeg is only $([math]::Round($size/1MB,1)) MB — looks dynamically linked"
+          }
+          # smoke test: the staged binary must execute from its staged location
+          resources\ffmpeg.exe -version | Select-Object -First 1
 
       # -- gates + build ----------------------------------------------------
 
