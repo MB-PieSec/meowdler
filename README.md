@@ -98,6 +98,11 @@ npm run fetch:ffmpeg  # optional: stage a system ffmpeg into resources/ so insta
 - The bundled engine (`resources/yt-dlp`) ships inside the package and is found
   via `process.resourcesPath` at runtime; ffmpeg resolution prefers a bundled
   copy, then the repo copy in dev, then `/usr/bin/ffmpeg`.
+- Recent yt-dlp needs a **JavaScript runtime** for YouTube (anti-bot
+  challenges). Meowdler autodetects Node across version managers (nvm,
+  nvm-windows), Homebrew, and system paths, and passes it as
+  `--js-runtimes node:<path>`. Without one, YouTube extraction degrades to
+  "The page needs to be reloaded" / bot-walls even with valid cookies.
 - App icons are generated with `python3 scripts/make-icons.py` (PIL only).
 - `homepage`/`repository` point at https://github.com/MB-PieSec/meowdler — the
   deb metadata validates them now.

@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 import {
@@ -13,6 +13,93 @@ import {
 import type { MediaPreview } from '../shared/downloads'
 import type { EngineInfo } from '../shared/ipc'
 import type { CookieSettings } from '../shared/settings'
+
+/**
+ * Finds a JavaScript runtime for yt-dlp's EJS engine. Recent yt-dlp releases
+ * need one to evaluate YouTube's client-side anti-bot challenges; without it,
+ * extraction degrades to "The page needs to be reloaded" / "Sign in to
+ * confirm you're not a bot" errors and missing formats — even with valid
+ * cookies. GUI-launched apps rarely share the user's shell PATH, so Node
+ * installed via nvm / Homebrew is searched explicitly. Verified live: with a
+ * runtime found, the exact URLs that previously failed extract cleanly.
+ *
+ * Result is cached per process; `null` means no usable runtime exists
+ * (extraction simply runs degraded, as before this helper).
+ */
+let cachedRuntime: string | null | undefined
+
+export function resolveJsRuntime(): string | null {
+  if (cachedRuntime !== undefined) return cachedRuntime
+
+  const home = app.getPath('home')
+  const candidates: string[] = []
+
+  const push = (candidate: string | undefined): void => {
+    if (typeof candidate === 'string' && candidate.length > 0 && fs.existsSync(candidate)) {
+      candidates.push(candidate)
+    }
+  }
+
+  // Node version managers (GUI launches don't inherit the shell's PATH)
+  const nvmUnix = path.join(home, '.nvm', 'versions', 'node')
+  try {
+    for (const version of fs.readdirSync(nvmUnix)) {
+      push(path.join(nvmUnix, version, 'bin', 'node'))
+    }
+  } catch {
+    /* no nvm */
+  }
+  const nvmWindows =
+    process.env.APPDATA === undefined ? null : path.join(process.env.APPDATA, 'nvm')
+  if (nvmWindows !== null) {
+    try {
+      for (const version of fs.readdirSync(nvmWindows)) {
+        push(path.join(nvmWindows, version, 'node.exe'))
+      }
+    } catch {
+      /* no nvm-windows */
+    }
+  }
+
+  // Standalone installs
+  push('/usr/bin/node')
+  push('/usr/local/bin/node')
+  push('/opt/homebrew/bin/node')
+  push('C:\\Program Files\\nodejs\\node.exe')
+
+  // Whatever PATH the app inherited (covers manual installs)
+  candidates.push('node')
+
+  for (const candidate of candidates) {
+    const check = spawnSync(candidate, ['--version'], { timeout: 5000, encoding: 'utf8' })
+    if (check.status === 0) {
+      cachedRuntime = `node:${candidate}`
+      return cachedRuntime
+    }
+  }
+  cachedRuntime = null
+  return null
+}
+
+/** Engine args enabling the JS runtime (empty when none was found). */
+export function jsRuntimeArgs(): string[] {
+  const runtime = resolveJsRuntime()
+  return runtime === null ? [] : ['--js-runtimes', runtime]
+}
+
+/**
+ * Rewrites known engine auth walls into actionable hints instead of raw
+ * channel-supported errors the user cannot act on.
+ */
+export function withEngineHint(message: string): string {
+  if (/sign in to confirm/i.test(message)) {
+    return `${message} — Fix: Settings → Cookies → use your browser or a fresh cookies.txt`
+  }
+  if (/needs to be reloaded/i.test(message)) {
+    return `${message} — Fix: the engine needs a JavaScript runtime (Node.js). Meowdler auto-detects common installs; restarting after installing Node lets it recover`
+  }
+  return message
+}
 
 /** Reads one binary's first stdout line, with a hard timeout. */
 function firstLine(binary: string, args: readonly string[]): Promise<string | null> {
@@ -171,6 +258,7 @@ export function probeFlat(
         '--no-playlist',
         '--no-warnings',
         '--skip-download',
+        ...jsRuntimeArgs(),
         ...extraArgs,
         url,
       ],
@@ -252,8 +340,10 @@ export function probeFlat(
       }
       reject(
         new Error(
-          extractLastError(stderr) ??
-            'The engine could not read this URL (unsupported, private, or offline?)',
+          withEngineHint(
+            extractLastError(stderr) ??
+              'The engine could not read this URL (unsupported, private, or offline?)',
+          ),
         ),
       )
     })
@@ -316,6 +406,7 @@ export function spawnYtDlpDownload(options: {
   if (ffmpegBinary !== null) {
     args.push('--ffmpeg-location', ffmpegBinary)
   }
+  args.push(...jsRuntimeArgs())
   args.push('-o', path.join(outDir, '%(title)s [%(id)s].%(ext)s'), url)
 
   const child: ChildProcess = spawn(binary, args, {
@@ -342,7 +433,7 @@ export function spawnYtDlpDownload(options: {
   })
   child.stderr?.on('data', (chunk: Buffer) => {
     const message = extractLastError(chunk.toString('utf8'))
-    if (message !== null) handlers.onError(message)
+    if (message !== null) handlers.onError(withEngineHint(message))
   })
 
   return child
