@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.8 (2026-10-17)
 
 Board hardening pass: every external claim re-verified against actual code, CI,
 and released artifacts; problems found were fixed before this item list.
