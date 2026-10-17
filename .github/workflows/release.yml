@@ -190,7 +190,12 @@ jobs:
           # yt-dlp 2026.08.19 (official SHA2-256SUMS)
           $YTD = 'https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19'
           Invoke-WebRequest -Uri "$YTD/yt-dlp.exe" -OutFile resources/yt-dlp
-          $sums = (Invoke-WebRequest -Uri "$YTD/SHA2-256SUMS").Content
+          # GitHub serves these sums as application/octet-stream, so
+          # Invoke-WebRequest .Content would arrive as a byte[] — download
+          # to a file and read it back as text instead.
+          Invoke-WebRequest -Uri "$YTD/SHA2-256SUMS" -OutFile yt-dlp-SHA2-256SUMS
+          $sums = Get-Content yt-dlp-SHA2-256SUMS -Raw
+          Remove-Item yt-dlp-SHA2-256SUMS
           $line = [regex]::Match($sums, '(?m)^([0-9a-f]{64})\s+yt-dlp\.exe\s*$')
           if (-not $line.Success) { throw 'yt-dlp.exe not found in official SHA2-256SUMS' }
           Assert-Hash resources/yt-dlp $line.Groups[1].Value
@@ -199,9 +204,11 @@ jobs:
           # variant uses a "Hash : <hex>" key/value format, not "hash  path")
           $DENO = 'https://github.com/denoland/deno/releases/download/v2.9.7'
           Invoke-WebRequest -Uri "$DENO/deno-x86_64-pc-windows-msvc.zip" -OutFile deno.zip
-          $dline = [regex]::Match(
-            (Invoke-WebRequest -Uri "$DENO/deno-x86_64-pc-windows-msvc.zip.sha256sum").Content,
+          # octet-stream here too — see the SHA2-256SUMS note above.
+          Invoke-WebRequest -Uri "$DENO/deno-x86_64-pc-windows-msvc.zip.sha256sum" -OutFile deno.sha256sum
+          $dline = [regex]::Match((Get-Content deno.sha256sum -Raw),
             'Hash\s*:\s*([0-9A-Fa-f]{64})')
+          Remove-Item deno.sha256sum
           if (-not $dline.Success) { throw 'deno zip checksum missing from .zip.sha256sum' }
           Assert-Hash deno.zip $dline.Groups[1].Value
           Expand-Archive -Path deno.zip -DestinationPath deno-tmp
@@ -214,8 +221,11 @@ jobs:
           # A published bump fails this lane: update the pin by re-verifying.
           $FFURL = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
           Invoke-WebRequest -Uri $FFURL -OutFile ffmpeg.zip
-          $fsum = [regex]::Match(
-            (Invoke-WebRequest -Uri "$FFURL.sha256").Content, '([0-9A-Fa-f]{64})')
+          # text/plain today, but keep the file-based read regardless so a
+          # content-type change upstream cannot break the lane.
+          Invoke-WebRequest -Uri "$FFURL.sha256" -OutFile ffmpeg.zip.sha256
+          $fsum = [regex]::Match((Get-Content ffmpeg.zip.sha256 -Raw), '([0-9A-Fa-f]{64})')
+          Remove-Item ffmpeg.zip.sha256
           if (-not $fsum.Success) { throw 'gyan.dev .sha256 did not contain a hash' }
           Assert-Hash ffmpeg.zip $fsum.Groups[1].Value
           Expand-Archive -Path ffmpeg.zip -DestinationPath ffmpeg-tmp
