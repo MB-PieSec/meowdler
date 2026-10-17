@@ -11,6 +11,13 @@ import { scheduleStartupEngineCheck } from './engine-updater'
 /** Catppuccin Mocha `base`, applied before first paint to avoid white flash. */
 const WINDOW_BG = '#1e1e2e'
 
+/**
+ * Renderer sandbox. Disabled only when the packaged-Linux decision below
+ * verdicts the runtime unreliable (AppImage/unpacked layouts) — see the
+ * comment at the flip site. deb / macOS / Windows stay fully sandboxed.
+ */
+let rendererSandboxEnabled = true
+
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1080,
@@ -27,7 +34,7 @@ function createMainWindow(): BrowserWindow {
       preload: path.join(import.meta.dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: rendererSandboxEnabled,
       spellcheck: false,
     },
   })
@@ -115,6 +122,12 @@ if (process.platform === 'linux' && app.isPackaged) {
 
   if (noSandbox) {
     app.commandLine.appendSwitch('no-sandbox')
+    // Electron's sandboxed renderer still tries the Chromium sandboxed
+    // launch even with `--no-sandbox` appended, and in this state it dies
+    // instantly (FATAL on shared memory → transparent window — shipped as
+    // v0.2.7). AppImage/unpacked Linux layouts run the unsandboxed
+    // renderer v0.2.6 shipped; the deb (SUID helper) keeps the sandbox.
+    rendererSandboxEnabled = false
   }
 }
 

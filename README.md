@@ -69,8 +69,9 @@ and update feeds. No runtime prerequisites.
 ### Platform notes
 
 - **Linux** — the deb keeps the Chromium sandbox; AppImage and unpacked builds
-  fall back to an unsandboxed zygote so they always start. App auto-update
-  works for AppImage; deb opens the releases page instead.
+  fall back to a fully unsandboxed browser (zygote **and** renderer) so they
+  always start on systems without user-namespaces or an SUID helper. App
+  auto-update works for AppImage; deb opens the releases page instead.
 - **Windows** (x64) — the NSIS installer is unsigned, so SmartScreen shows the
   classic _"Windows protected your PC"_ prompt: choose **More info → Run
   anyway**. You can change the install folder during setup.
