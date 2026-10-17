@@ -183,7 +183,7 @@ jobs:
           function Assert-Hash([string]$File, [string]$Expected) {
             $actual = (Get-FileHash -Algorithm SHA256 $File).Hash.ToLower()
             if ($actual -ne $Expected.ToLower()) {
-              throw "checksum mismatch for $File: $actual != $Expected"
+              throw "checksum mismatch for ${File}: $actual != $Expected"
             }
           }
 

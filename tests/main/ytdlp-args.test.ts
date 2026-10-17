@@ -172,9 +172,22 @@ describe('withEngineHint (cookie + engine failures)', () => {
     const message = 'ERROR: unsupported platform: linux'
     expect(withEngineHint(message)).toMatch(/works on macOS only/)
   })
-  it('hints unreadable cookie sources (generic permission class, Windows-like message kept neutral)', () => {
-    const message = "ERROR: [Errno 13] Permission denied: '/home/u/.mozilla/firefox/Cookies'"
-    expect(withEngineHint(message)).toContain('check the file/browser access')
+  it('hints unreadable cookie sources per platform (test stubs each OS)', () => {
+    const realPlatform = process.platform
+    const stub = (platform: NodeJS.Platform): void => {
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+    }
+    try {
+      const message = "ERROR: [Errno 13] Permission denied: '/home/u/.mozilla/firefox/Cookies'"
+      stub('linux')
+      expect(withEngineHint(message)).toContain('check the file/browser access')
+      stub('win32')
+      expect(withEngineHint(message)).toContain('check the file/browser access')
+      stub('darwin')
+      expect(withEngineHint(message)).toMatch(/Full Disk Access/)
+    } finally {
+      stub(realPlatform)
+    }
   })
   it('adds a generic cookie fallback for unclassified load failures', () => {
     expect(withEngineHint('ERROR: failed to load cookies')).toMatch(/close the browser fully/)
