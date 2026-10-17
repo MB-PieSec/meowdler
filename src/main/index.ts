@@ -31,7 +31,7 @@ function createMainWindow(): BrowserWindow {
     backgroundColor: WINDOW_BG,
     title: 'Meowdler',
     webPreferences: {
-      preload: path.join(import.meta.dirname, '../preload/index.js'),
+      preload: path.join(import.meta.dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: rendererSandboxEnabled,
