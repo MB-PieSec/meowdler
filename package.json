@@ -1,7 +1,7 @@
 {
   "name": "meowdler",
   "productName": "Meowdler",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "Catppuccin-themed desktop downloader for YouTube, X, and Instagram",
   "license": "MIT",
