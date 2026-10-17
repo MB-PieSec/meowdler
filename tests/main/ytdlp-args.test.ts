@@ -78,6 +78,14 @@ describe('cookieArgsFor (pure translation)', () => {
   })
 })
 
+/**
+ * chmod has no meaning on Windows (and a root user ignores it on POSIX) —
+ * the 'unreadable' fixture can only be exercised where permissions apply.
+ */
+const chmodSkipped =
+  process.platform === 'win32' || (typeof process.getuid === 'function' && process.getuid() === 0)
+const itPerm = chmodSkipped ? it.skip : it
+
 describe('validateCookieFile', () => {
   it('accepts a standard Netscape file', () => {
     expect(validateCookieFile(path.join(dir, 'valid.txt')).status).toBe('ok')
@@ -95,7 +103,7 @@ describe('validateCookieFile', () => {
     expect(validateCookieFile(path.join(dir, 'nope.txt')).status).toBe('missing')
     expect(validateCookieFile(dir).status).toBe('missing')
   })
-  it('reports unreadable files', () => {
+  itPerm('reports unreadable files', () => {
     expect(validateCookieFile(path.join(dir, 'noperm.txt')).status).toBe('unreadable')
   })
 })
@@ -112,17 +120,20 @@ describe('resolveCookieArgs (pre-spawn guard)', () => {
   it('throws instead of silently ignoring a broken cookies file', () => {
     expect(() => resolveCookieArgs(file(path.join(dir, 'garbage.txt')))).toThrow(/Netscape format/)
     expect(() => resolveCookieArgs(file(path.join(dir, 'nope.txt')))).toThrow(/gone or unreadable/)
-    expect(() => resolveCookieArgs(file(path.join(dir, 'noperm.txt')))).toThrow(/cannot be read/)
     expect(() => resolveCookieArgs(file(null))).toThrow(/no file is chosen/)
   })
+  itPerm('throws on unreadable files', () => {
+    expect(() => resolveCookieArgs(file(path.join(dir, 'noperm.txt')))).toThrow(/cannot be read/)
+  })
   it('points every failure at Settings → Cookies', () => {
-    for (const broken of [
+    const broken = [
       file(path.join(dir, 'garbage.txt')),
       file(path.join(dir, 'nope.txt')),
-      file(path.join(dir, 'noperm.txt')),
       file(null),
-    ]) {
-      expect(() => resolveCookieArgs(broken)).toThrow('Settings → Cookies')
+    ]
+    if (!chmodSkipped) broken.push(file(path.join(dir, 'noperm.txt')))
+    for (const case_ of broken) {
+      expect(() => resolveCookieArgs(case_)).toThrow('Settings → Cookies')
     }
   })
 })
